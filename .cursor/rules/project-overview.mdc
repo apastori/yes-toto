@@ -1,0 +1,41 @@
+---
+description: Project identity, purpose, and high-level goals for `yes-toto`
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# yes-toto — Project Overview
+
+## What This Project Is
+
+`yes-toto` is a faithful CLI replica of the GNU Core Utilities `yes` command.
+It outputs a string (default: `y`) followed by a newline, in an infinite loop, to stdout — until killed by a signal or a broken pipe closes stdout.
+
+## Binary Name
+The compiled binary must always be named **`yes-toto`**. Never rename it.
+
+## Scope — Keep It Minimal
+
+This is intentionally a single-purpose tool. Do add:
+
+- Flags or options (`--help`, `--version`, etc.)
+- Message when the tool is called with unknown flags
+
+**Do not add**:
+
+- Interactive or TUI modes
+- stdin reading
+- Logging or debug output in normal operation
+- Any feature that would break GNU `yes` behavioral compatibility
+
+## Behavioral Contract
+
+| Invocation | Output |
+|---|---|
+| `yes-toto` | prints `y\n` forever |
+| `yes-toto hello` | prints `hello\n` forever |
+| `yes-toto a b c` | prints `a b c\n` forever (args joined with space) |
+| `yes-toto \| head -5` | prints 5 lines, exits cleanly on broken pipe |
+| `yes-toto --version` or `yes-toto --v` shows version and information about the software (author, licence)
+| `yes-toto --help` shows how to use the tool
+
