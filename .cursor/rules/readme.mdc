@@ -1,0 +1,128 @@
+
+---
+description: README.md content requirements for yes-toto
+globs: ["README.md"]
+alwaysApply: false
+---
+
+# README Requirements
+
+When generating or editing `README.md`, include the following sections in this exact order.
+
+---
+
+## 1. Title & Description
+
+```markdown
+# yes-toto
+
+A faithful C implementation of the Unix `yes` command.
+Outputs a string (default: `y`) repeatedly and infinitely to stdout,
+until killed or its output pipe is closed.
+```
+
+---
+
+## 2. Requirements
+
+```markdown
+## Requirements
+
+- GCC or Clang
+- GNU Make
+- A POSIX-compatible system (Linux, macOS, BSD)
+```
+
+---
+
+## 3. Building
+
+```markdown
+## Building
+
+\`\`\`bash
+git clone https://github.com/youruser/yes-toto
+cd yes-toto
+make
+\`\`\`
+
+The binary will be placed at `./yes-toto`.
+
+To clean build artifacts:
+\`\`\`bash
+make clean
+\`\`\`
+```
+
+---
+
+## 4. Usage
+
+Must cover all behaviors from the behavioral contract in `01-project-overview`:
+
+```markdown
+## Usage
+
+\`\`\`bash
+# Print "y" forever (default)
+yes-toto
+
+# Print a custom string forever
+yes-toto hello
+
+# Print multiple arguments joined by a space
+yes-toto a b c
+
+# Use with a pipe — exits cleanly when the pipe closes
+yes-toto | head -5
+
+# Show version, author, and licence
+yes-toto --version
+yes-toto -v
+
+# Show usage help
+yes-toto --help
+yes-toto -h
+\`\`\`
+```
+
+---
+
+## 5. Running Tests
+
+```markdown
+## Running Tests
+
+\`\`\`bash
+make test
+\`\`\`
+
+Runs both unit tests (argument parsing) and integration tests (subprocess output).
+```
+
+---
+
+## 6. About
+
+```markdown
+## About
+
+`yes-toto` replicates the behavior of the `yes` utility from GNU Core Utilities.
+
+- **Author:** Your Name
+- **License:** MIT
+```
+
+The author and licence values here must match the constants defined in `src/version.h`.
+
+---
+
+## Style Rules for README
+
+- Use fenced code blocks with `bash` syntax highlighting for all shell examples.
+- No emojis.
+- No badges unless the user explicitly asks.
+- Keep prose minimal — one or two sentences per section introduction at most.
+- Do not document internal implementation details (module layout, buffer sizes, etc.) — the README is for users, not contributors.
+- If a `CONTRIBUTING.md` or `LICENSE` file is added later, link to them from the About section rather than inlining their content.
+

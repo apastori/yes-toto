@@ -1,0 +1,212 @@
+---
+description: Canonical implementation pattern for yes-toto in C — module layout, hot loop, argument handling, flags, and exit behavior
+globs: ["src/**/*.c", "src/**/*.h"]
+alwaysApply: false
+---
+
+# Core Implementation
+
+## Module Breakdown
+
+Split the implementation across these modules. Only create a module when its concern is present:
+
+| File | Responsibility |
+|---|---|
+| `src/main.c` | Entry point only — parse args, dispatch, call `output_loop()` |
+| `src/args.c` / `src/args.h` | Argument parsing, flag detection (`--help`, `--version`), string joining |
+| `src/output.c` / `src/output.h` | Buffered write loop to stdout |
+| `src/version.h` | Version string, author, licence constants |
+
+`main.c` must stay thin. It should contain no business logic — only wiring.
+
+---
+
+## `src/version.h`
+
+```c
+#ifndef VERSION_H
+#define VERSION_H
+
+#define YES_TOTO_VERSION  "1.0.0"
+#define YES_TOTO_AUTHOR   "Your Name"
+#define YES_TOTO_LICENSE  "MIT"
+
+#endif /* VERSION_H */
+```
+
+---
+
+## `src/args.h`
+
+```c
+#ifndef ARGS_H
+#define ARGS_H
+
+/* Parsed result of argv. */
+typedef struct {
+    const char *output;   /* string to repeat; never NULL */
+    int show_help;
+    int show_version;
+} Args;
+
+/*
+ * Parse argc/argv into an Args struct.
+ * Returns 0 on success, -1 on unknown flag.
+ * On unknown flag, writes an error message to stderr.
+ */
+int args_parse(int argc, char *argv[], Args *out);
+
+/*
+ * Join argv[start..argc-1] with a single space into buf (size: bufsz).
+ * Returns 0 on success, -1 if buf is too small.
+ */
+int args_join(int argc, char *argv[], int start, char *buf, int bufsz);
+
+#endif /* ARGS_H */
+```
+
+---
+
+## `src/args.c`
+
+Key rules:
+- Detect `--help` and `-h` → set `args->show_help = 1`.
+- Detect `--version` and `-v` → set `args->show_version = 1`.
+- Detect any other flag starting with `-` → print to **stderr**:
+  ```
+  yes-toto: unknown option: --foo
+  Try 'yes-toto --help' for more information.
+  ```
+  Then return `-1`.
+- If no flag is found, join remaining args with a single space into a static buffer and set `args->output`.
+- If no args at all, `args->output` defaults to `"y"`.
+
+---
+
+## `src/output.h`
+
+```c
+#ifndef OUTPUT_H
+#define OUTPUT_H
+
+/*
+ * Write `str` followed by '\n' to stdout in an infinite loop,
+ * using a large write buffer for performance.
+ * Returns only when stdout is closed (broken pipe) or a write error occurs.
+ */
+void output_loop(const char *str);
+
+#endif /* OUTPUT_H */
+```
+
+---
+
+## `src/output.c` — The Hot Loop
+
+```c
+#include "output.h"
+#include <stdio.h>
+#include <string.h>
+
+#define BUF_SIZE 65536  /* 64 KB write buffer */
+
+void output_loop(const char *str)
+{
+    char buf[BUF_SIZE];
+    size_t str_len = strlen(str);
+
+    /*
+     * Pre-fill the buffer with as many "str\n" repetitions as fit.
+     * This minimises syscall overhead in the write loop.
+     */
+    size_t line_len = str_len + 1; /* +1 for '\n' */
+    size_t filled = 0;
+
+    while (filled + line_len <= BUF_SIZE) {
+        memcpy(buf + filled, str, str_len);
+        buf[filled + str_len] = '\n';
+        filled += line_len;
+    }
+
+    /* Write the pre-filled buffer in a tight loop. */
+    while (fwrite(buf, 1, filled, stdout) == filled) {
+        /* keep going */
+    }
+    /* fwrite returned short — broken pipe or error. Exit cleanly. */
+}
+```
+
+Rules for the hot loop:
+- **Pre-fill a large buffer** before the loop — do not call `fputs`/`printf` per line.
+- **Use `fwrite`** for bulk writes, not `printf`, `puts`, or `fputs`.
+- **No per-iteration allocation** — `buf` is stack-allocated once.
+- **Exit cleanly on short write** — `fwrite` returning less than `filled` means the pipe is closed; break and return.
+- **No `fflush` inside the loop** — only flush on exit if needed.
+- **No `sleep`, delays, or rate limiting.**
+- Buffer size is `65536` (64 KB) by default. Do not change it without a concrete performance reason.
+
+---
+
+## `src/main.c`
+
+```c
+#include "args.h"
+#include "output.h"
+#include "version.h"
+#include <stdio.h>
+#include <stdlib.h>
+
+int main(int argc, char *argv[])
+{
+    Args args;
+
+    if (args_parse(argc, argv, &args) != 0) {
+        return EXIT_FAILURE;
+    }
+
+    if (args.show_version) {
+        printf("yes-toto %s\n", YES_TOTO_VERSION);
+        printf("Author:  %s\n", YES_TOTO_AUTHOR);
+        printf("License: %s\n", YES_TOTO_LICENSE);
+        return EXIT_SUCCESS;
+    }
+
+    if (args.show_help) {
+        printf("Usage: yes-toto [STRING]...\n");
+        printf("       yes-toto [OPTION]\n\n");
+        printf("Repeatedly output a line with STRING, or 'y'.\n\n");
+        printf("Options:\n");
+        printf("  -h, --help     display this help and exit\n");
+        printf("  -v, --version  output version information and exit\n");
+        return EXIT_SUCCESS;
+    }
+
+    output_loop(args.output);
+    return EXIT_SUCCESS;
+}
+```
+
+---
+
+## Exit Behavior
+
+| Situation | Expected behavior |
+|---|---|
+| Broken pipe / stdout closed | `fwrite` returns short → `output_loop` returns → `main` returns `EXIT_SUCCESS` |
+| SIGINT (Ctrl+C) | OS delivers signal → process terminates (default handler) |
+| Unknown flag | Error message to stderr → `EXIT_FAILURE` |
+| `--help` | Usage printed to stdout → `EXIT_SUCCESS` |
+| `--version` / `-v` | Version info printed to stdout → `EXIT_SUCCESS` |
+
+---
+
+## What Not to Generate
+
+- ❌ `printf` or `fputs` inside the hot loop — use `fwrite` with a pre-filled buffer
+- ❌ `fflush` inside the hot loop
+- ❌ `exit()` calls inside modules — only `main` may return an exit code
+- ❌ Signal handlers — default OS behavior is correct
+- ❌ Dynamic memory allocation (`malloc`/`calloc`) — use stack buffers
+- ❌ Global mutable state outside of `main`
+- ❌ Recursive functions
+
