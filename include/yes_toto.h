@@ -40,6 +40,11 @@
 /* Semantic version printed by `yes-toto --version`. */
 #define YES_TOTO_VERSION_STRING "1.0.0"
 
+enum {
+    YES_TOTO_EXIT_OK_PIPE = 0,
+    YES_TOTO_EXIT_WRITE_ERR = 1
+};
+
 /*
  * yes_toto_run — write `line` (length `line_len`, includes trailing '\n')
  * to stdout forever until EPIPE (exit 0) or a non-EPIPE write error (exit 1).
