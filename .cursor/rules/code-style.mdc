@@ -1,147 +1,52 @@
 ---
 description: C code style, formatting, naming, and quality rules for yes-toto
-globs: ["src/**/*.c", "src/**/*.h", "Makefile"]
+globs: ["src/**/*.c", "include/**/*.h", "tests/**/*.c", "Makefile"]
 alwaysApply: false
 ---
 
 # Code Style & Quality
 
+## Standard & toolchain
+
+- **C11** (`-std=c11`), `-Wall -Wextra -Wpedantic -Werror`, `-D_POSIX_C_SOURCE=200809L`.
+
 ## Formatting
 
-- **Indentation:** 4 spaces. No tabs anywhere.
-- **Brace style:** K&R — opening brace on the same line as the control statement, closing brace on its own line.
-  ```c
-  /* correct */
-  if (condition) {
-      do_something();
-  }
-
-  /* wrong */
-  if (condition)
-  {
-      do_something();
-  }
-  ```
-- **Function definitions:** opening brace on its **own line** (POSIX/Linux kernel convention for function bodies only).
-  ```c
-  void output_loop(const char *str)
-  {
-      /* body */
-  }
-  ```
-- **Line length:** max **80 characters**. Break long expressions across lines, aligning at the opening parenthesis.
-- **One blank line** between logical sections inside a function. Two blank lines between top-level definitions.
-- **No trailing whitespace.**
+- **Indentation:** 4 spaces. No tabs.
+- **Function definitions:** opening brace on its own line (see `src/main.c`).
+- **Line length:** prefer ≤80 characters where practical.
 - **Files end with a single newline.**
 
----
+## Layout
 
-## Naming Conventions
+- `include/yes_toto.h` — `static inline` **`fill_buffer()`** is intentional (included by `tests/test_core.c` without linking `main.c`).
+- `src/main.c` — argv, meta flags, join buffer, **`write()`** loop. No separate `args.c` / `output.c`.
 
-| Kind | Convention | Example |
-|---|---|---|
-| Functions | `snake_case` | `args_parse`, `output_loop` |
-| Local variables | `snake_case` | `line_len`, `filled` |
-| Constants / macros | `UPPER_SNAKE_CASE` | `BUF_SIZE`, `YES_TOTO_VERSION` |
-| Struct types | `PascalCase` via `typedef` | `Args` |
-| Struct fields | `snake_case` | `show_help`, `output` |
-| Source files | `snake_case` | `args.c`, `output.c` |
-| Header guards | `FILENAME_H` | `ARGS_H`, `OUTPUT_H` |
+## Naming
 
-- **No single-letter variables** outside of loop counters (`i`, `j`, `n`).
-- **No abbreviated names** that obscure meaning (e.g., use `str_len` not `sl`, `filled` not `f`).
+- Functions: `snake_case` (`yes_toto_run`, `fill_buffer`).
+- Macros / constants: `UPPER_SNAKE_CASE` (`YES_TOTO_BUF_SIZE`).
 
----
+## Memory
 
-## Header Files
+- **Hot loop:** no `malloc` / `stdio` formatting. Stack buffer `char buf[YES_TOTO_BUF_SIZE]` for prefilled slab.
+- **Before the loop only:** `malloc` is permitted when the joined argv line exceeds `YES_TOTO_JOIN_STACK_CAP` (see `implementation.mdc` deviation). No `realloc` in-tree.
 
-- Every `.h` file **must** have an include guard using the filename in `UPPER_SNAKE_CASE`:
-  ```c
-  #ifndef ARGS_H
-  #define ARGS_H
+## Hot loop rules
 
-  /* declarations */
+- Use `write(STDOUT_FILENO, …)` with partial-write retry. No `printf` / `fprintf` / `puts` / `fputs` / `fwrite` inside the loop.
+- `exit()` on `EPIPE` after `fflush(stdout)` inside the low-level writer is required so broken pipes yield status `0`; real write faults exit `1`.
 
-  #endif /* ARGS_H */
-  ```
-- Headers declare only what other modules need — no implementation in `.h` files (no `static inline` unless performance-critical and justified).
-- Include only what the header itself directly uses. Do not rely on transitive includes.
-- Order of `#include` directives inside `.c` files:
-  1. The module's own header (e.g., `#include "args.h"` in `args.c`)
-  2. Other local headers
-  3. Standard library headers (`<stdio.h>`, `<stdlib.h>`, `<string.h>`)
+## Errors
 
----
+- **stderr** only, format: `yes-toto: <context>: <strerror(errno)>`.
 
-## Compiler Warnings as Errors
+## Tests
 
-All code must compile cleanly under:
-```
-gcc -std=c99 -Wall -Wextra -Wpedantic -O2
-```
-Zero warnings are acceptable. Treat every warning as a bug. Common issues to avoid proactively:
+- Plain `assert()` in `tests/test_core.c` is allowed; `assert` failure implies `abort()` (non-zero `make test`).
 
-- Unused function parameters → use `(void)param;` if the parameter is intentionally unused.
-- Implicit function declarations → always include the correct header.
-- Signed/unsigned comparison → be explicit with `size_t` vs `int` comparisons.
-- Missing `return` in non-void functions → every code path must return a value.
+## What not to do
 
----
-
-## Error Handling
-
-- **Check every return value** from standard library functions used in non-hot paths (`fclose`, `fprintf`, `snprintf`, etc.).
-- In the hot loop (`output_loop`), a short `fwrite` return is the only error condition — handle it by returning from the function, not by calling `exit()`.
-- **Never call `exit()`** inside a module (`args.c`, `output.c`). Only `main` decides the exit code.
-- **No `abort()`** calls.
-- Write all error messages to **`stderr`**, never to `stdout`.
-- Error message format:
-  ```
-  yes-toto: <description of problem>
-  ```
-
----
-
-## Comments
-
-- Use `/* */` block comments for multi-line explanations and file/function headers.
-- Use `//` single-line comments for brief inline notes (C99 allows this).
-- **Function header comment** — required for every non-trivial function in `.c` files:
-  ```c
-  /*
-   * args_parse — parse argc/argv into an Args struct.
-   * Returns 0 on success, -1 if an unknown flag is encountered.
-   */
-  ```
-- **Do not** comment what the code obviously does:
-  ```c
-  i++;          /* wrong: increment i */
-  i++;          /* correct: no comment needed */
-  ```
-- **Do** comment non-obvious decisions:
-  ```c
-  /* Pre-fill the buffer to minimise fwrite syscall overhead. */
-  ```
-- Keep comments up to date — a stale comment is worse than no comment.
-
----
-
-## Memory & Resources
-
-- **No dynamic allocation** (`malloc`, `calloc`, `realloc`). Use stack buffers sized with named constants.
-- **No global mutable variables.** Constants (`#define`, `const`) are fine.
-- Every resource acquired must be released before the function returns — this project has no long-lived resources, but the principle applies.
-
----
-
-## What Not to Generate
-
-- ❌ Tabs for indentation
-- ❌ Single-letter variable names outside loop counters
-- ❌ `exit()` or `abort()` inside any module other than `main`
-- ❌ `malloc`/`calloc` — stack allocation only
-- ❌ Recursive functions
-- ❌ Code that produces warnings under `-Wall -Wextra -Wpedantic`
-- ❌ Commented-out dead code left in files
-- ❌ TODO stubs unless the user explicitly requests them
-
+- Do not compile as C++.
+- Do not add libc dependencies beyond the platform C library.
+- Do not use `gets`, unbounded `scanf`, or ignore `write()` return counts without looping.

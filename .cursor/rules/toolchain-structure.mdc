@@ -1,83 +1,42 @@
 ---
 description: C toolchain, build system setup, and directory structure for yes-toto
-globs: ["Makefile", "CMakeLists.txt", "*.c", "*.h", "src/**/*.c", "src/**/*.h"]
+globs: ["Makefile", "*.c", "*.h", "src/**/*.c", "include/**/*.h", "tests/**/*.c"]
 alwaysApply: false
 ---
 
 # Toolchain & Project Structure
 
 ## Language
-**C**, standard **C99** (`-std=c99`). No C++, no other language unless explicitly requested by the user.
+
+**C11** (`-std=c11`), POSIX.1-2008 feature macro `-D_POSIX_C_SOURCE=200809L`. No C++.
 
 ## Compiler
-**GCC** (preferred) or **Clang**. Both must produce a warning-free build.
-Required compiler flags for all builds:
-```
--std=c99 -Wall -Wextra -Wpedantic -O2
-```
 
-## Build System
-**Make** with a handwritten `Makefile`. Do not use CMake, Autotools, Meson, or any other meta-build system unless the user explicitly asks.
+**GCC** (preferred) or **Clang**, selected in the `Makefile`. Required flags include `-Wall -Wextra -Wpedantic -Werror`. See `Makefile` comments for rationale.
 
-## Required `Makefile`
-```makefile
-CC      = gcc
-CFLAGS  = -std=c99 -Wall -Wextra -Wpedantic -O2
-TARGET  = yes-toto
-SRC     = $(wildcard src/*.c)
-OBJ     = $(SRC:.c=.o)
+## Build system
 
-.PHONY: all clean
-
-all: $(TARGET)
-
-$(TARGET): $(OBJ)
-	$(CC) $(CFLAGS) -o $(TARGET) $(OBJ)
-
-src/%.o: src/%.c
-	$(CC) $(CFLAGS) -c $< -o $@
-
-clean:
-	rm -f $(OBJ) $(TARGET)
-```
-
-Rules:
-- The output binary must always be named **`yes-toto`**. Never change `TARGET`.
-- The entry point must always be in `src/main.c`. Never rename or move this file.
-- All `.c` files inside `src/` are automatically picked up by the wildcard — no manual `SRC` updates needed when adding new source files.
-- Each `.c` file compiles to its own `.o` object file inside `src/` before linking.
+**GNU Make** with the root `Makefile`. Targets: `all` / `yes-toto`, `debug`, `test`, `clean`, `install`.
 
 ## Dependencies
-**Zero external libraries.** Only the C standard library is permitted:
-- `<stdio.h>` — for `fputs`, `fwrite`, `fflush`, `stderr`
-- `<stdlib.h>` — for `EXIT_SUCCESS`, `EXIT_FAILURE`
-- `<string.h>` — for `strlen`, `strcpy`, `strcat` if needed
 
-Never add `-l` linker flags for third-party libraries without explicit user approval.
+**libc only** (no extra `-l`). Headers may include POSIX APIs (`unistd.h`, `signal.h`, …).
 
-## Directory Layout
+## Directory layout (authoritative)
+
 ```
 yes-toto/
-├── .cursor/
-│   └── rules/
+├── .cursor/rules/
 ├── Makefile
 ├── README.md
-└── src/
-    ├── main.c
-    ├── output.c       ← example: buffered write loop
-    ├── output.h
-    ├── args.c         ← example: argument parsing
-    └── args.h
+├── include/
+│   └── yes_toto.h
+├── src/
+│   └── main.c
+└── tests/
+    └── test_core.c
 ```
 
-- **`src/main.c`** is always the entry point. It should be kept thin — delegate logic to other modules.
-- **Split by responsibility** — each logical concern (argument handling, output loop, signal/pipe handling) should live in its own `.c` / `.h` pair when it improves clarity.
-- **Header files are encouraged** — use them to define public interfaces between modules. Each `.h` must have an include guard:
-  ```c
-  #ifndef MODULE_NAME_H
-  #define MODULE_NAME_H
-  /* declarations */
-  #endif /* MODULE_NAME_H */
-  ```
-- **Keep `src/` flat** — no subdirectories inside `src/`. All `.c` and `.h` files sit directly in `src/`.
-- **No file is created purely for the sake of splitting** — only introduce a new module when it genuinely improves readability or separation of concerns.
+- Public prototypes and `fill_buffer()` live in **`include/yes_toto.h`**.
+- **`src/main.c`** is the only compilation unit for the `yes-toto` binary (single TU build in `Makefile`).
+- **`tests/test_core.c`** compiles alone against the header (inline `fill_buffer`).

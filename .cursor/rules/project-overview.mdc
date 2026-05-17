@@ -9,33 +9,38 @@ alwaysApply: true
 ## What This Project Is
 
 `yes-toto` is a faithful CLI replica of the GNU Core Utilities `yes` command.
-It outputs a string (default: `y`) followed by a newline, in an infinite loop, to stdout — until killed by a signal or a broken pipe closes stdout.
+It outputs a string (default: `y`) followed by a newline, in an infinite loop, to stdout — until killed by a signal or a broken pipe closes stdout (treated as exit status `0`).
 
 ## Binary Name
+
 The compiled binary must always be named **`yes-toto`**. Never rename it.
 
 ## Scope — Keep It Minimal
 
-This is intentionally a single-purpose tool. Do add:
+Supporting behaviour:
 
-- Flags or options (`--help`, `--version`, etc.)
-- Message when the tool is called with unknown flags
+- Built-in `--help` and `--version` (detected anywhere in `argv`; `--help` wins if both appear)
+- GNU-compatible strings: tokens such as `--foo` or `-` are ordinary output, not errors
 
 **Do not add**:
 
 - Interactive or TUI modes
 - stdin reading
 - Logging or debug output in normal operation
-- Any feature that would break GNU `yes` behavioral compatibility
+- Any feature that would break GNU `yes` behavioural compatibility
 
-## Behavioral Contract
+## Behavioural Contract
 
 | Invocation | Output |
 |---|---|
 | `yes-toto` | prints `y\n` forever |
 | `yes-toto hello` | prints `hello\n` forever |
 | `yes-toto a b c` | prints `a b c\n` forever (args joined with space) |
-| `yes-toto \| head -5` | prints 5 lines, exits cleanly on broken pipe |
-| `yes-toto --version` or `yes-toto --v` shows version and information about the software (author, licence)
-| `yes-toto --help` shows how to use the tool
+| `yes-toto ""` | prints `\n` forever |
+| `yes-toto \| head -n5` | prints 5 lines; exits `0` on broken pipe |
+| `yes-toto --version` | prints `yes-toto <version>\n`, exits `0` |
+| `yes-toto --help` | prints usage on stdout, exits `0` |
 
+## Implementation Notes
+
+See `implementation.mdc` for C11, 64 KiB buffer policy, `SIGPIPE` handling, hot-loop restrictions, stderr format, and justified deviations (e.g. optional `malloc` for very long joined argv strings before the loop).

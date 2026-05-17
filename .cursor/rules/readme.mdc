@@ -7,122 +7,19 @@ alwaysApply: false
 
 # README Requirements
 
-When generating or editing `README.md`, include the following sections in this exact order.
+When generating or editing `README.md`, keep it user-focused and aligned with the current program behaviour (see `project-overview.mdc` and `implementation.mdc`).
 
----
+## Suggested sections
 
-## 1. Title & Description
+1. **Title & short description** — `yes`-like tool, infinite lines to stdout, broken pipe is normal.
+2. **Requirements** — GCC or Clang, GNU Make, POSIX-like environment for `sigaction` / `write`.
+3. **Building** — `make`, `make debug`, `make clean`, optional `make install`.
+4. **Usage** — default `y`, joined args, `""` → blank lines, `| head`, `--help`, `--version` (only those long options are special; there are no `-h` / `-v` aliases unless the code adds them).
+5. **Tests** — `make test` runs `tests/test_core.c` (`fill_buffer` unit tests only).
+6. **Exit codes** — `0` including `EPIPE`; `1` on other write/setup failures; stderr format as in `implementation.mdc`.
 
-```markdown
-# yes-toto
+## Style
 
-A faithful C implementation of the Unix `yes` command.
-Outputs a string (default: `y`) repeatedly and infinitely to stdout,
-until killed or its output pipe is closed.
-```
-
----
-
-## 2. Requirements
-
-```markdown
-## Requirements
-
-- GCC or Clang
-- GNU Make
-- A POSIX-compatible system (Linux, macOS, BSD)
-```
-
----
-
-## 3. Building
-
-```markdown
-## Building
-
-\`\`\`bash
-git clone https://github.com/youruser/yes-toto
-cd yes-toto
-make
-\`\`\`
-
-The binary will be placed at `./yes-toto`.
-
-To clean build artifacts:
-\`\`\`bash
-make clean
-\`\`\`
-```
-
----
-
-## 4. Usage
-
-Must cover all behaviors from the behavioral contract in `01-project-overview`:
-
-```markdown
-## Usage
-
-\`\`\`bash
-# Print "y" forever (default)
-yes-toto
-
-# Print a custom string forever
-yes-toto hello
-
-# Print multiple arguments joined by a space
-yes-toto a b c
-
-# Use with a pipe — exits cleanly when the pipe closes
-yes-toto | head -5
-
-# Show version, author, and licence
-yes-toto --version
-yes-toto -v
-
-# Show usage help
-yes-toto --help
-yes-toto -h
-\`\`\`
-```
-
----
-
-## 5. Running Tests
-
-```markdown
-## Running Tests
-
-\`\`\`bash
-make test
-\`\`\`
-
-Runs both unit tests (argument parsing) and integration tests (subprocess output).
-```
-
----
-
-## 6. About
-
-```markdown
-## About
-
-`yes-toto` replicates the behavior of the `yes` utility from GNU Core Utilities.
-
-- **Author:** Your Name
-- **License:** MIT
-```
-
-The author and licence values here must match the constants defined in `src/version.h`.
-
----
-
-## Style Rules for README
-
-- Use fenced code blocks with `bash` syntax highlighting for all shell examples.
-- No emojis.
-- No badges unless the user explicitly asks.
-- Keep prose minimal — one or two sentences per section introduction at most.
-- Do not document internal implementation details (module layout, buffer sizes, etc.) — the README is for users, not contributors.
-- If a `CONTRIBUTING.md` or `LICENSE` file is added later, link to them from the About section rather than inlining their content.
-
+- Fenced `sh` or `bash` blocks for commands.
+- No emojis unless the user asks.
+- Do not promise author/licence banners on `--version` unless the binary actually prints them.

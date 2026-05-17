@@ -1,247 +1,34 @@
 ---
-description: Integration testing strategy, test harness setup, and test templates for yes-toto in C
-globs: ["tests/**/*.c", "tests/**/*.h", "Makefile"]
+description: Unit test conventions for yes-toto (fill_buffer)
+globs: ["tests/**/*.c", "Makefile"]
 alwaysApply: false
 ---
 
-# Testing
+# Testing — yes-toto
 
-## Test Strategy
+## Scope
 
-`yes-toto` runs forever, so in-process unit tests are not applicable for the output loop. Use **integration tests** that:
-1. Spawn `./yes-toto` as a child process.
-2. Read exactly N lines from its stdout via a pipe.
-3. Assert the lines match the expected string.
-4. Close the read end of the pipe and wait for the child to exit cleanly.
+Integration tests against a child process are optional; the Makefile `test` target builds and runs **`tests/test_core.c`** only.
 
-Unit tests **are** appropriate for pure logic functions in `args.c` (e.g. `args_join`, flag detection) since those do not involve infinite loops or I/O.
+## Framework
 
----
+- No external framework — plain C with `<assert.h>`.
+- Each case prints `PASS: <descriptive name>` on success.
+- `assert()` failures call `abort()` and fail `make test` non-zero.
 
-## Test Location & Build
-
-Place all tests in a `tests/` directory at the project root:
-
-```
-yes-toto/
-├── Makefile
-├── src/
-└── tests/
-    ├── test_runner.c      ← main() for the test binary
-    ├── test_output.c      ← integration tests for the output loop
-    └── test_args.c        ← unit tests for args_parse / args_join
-```
-
-Add a `test` target to the `Makefile`:
+## Build
 
 ```makefile
-TEST_SRC  = $(wildcard tests/*.c)
-TEST_OBJ  = $(TEST_SRC:.c=.o)
-TEST_BIN  = tests/run_tests
-
-# args.o and any other non-main objects are reused by the test binary.
-# main.o is excluded to avoid a duplicate main().
-LIB_OBJ   = $(filter-out src/main.o, $(OBJ))
-
-.PHONY: test
-test: all $(TEST_BIN)
-	./$(TEST_BIN)
-
-$(TEST_BIN): $(TEST_OBJ) $(LIB_OBJ)
-	$(CC) $(CFLAGS) -o $(TEST_BIN) $(TEST_OBJ) $(LIB_OBJ)
-
-tests/%.o: tests/%.c
-	$(CC) $(CFLAGS) -Isrc -c $< -o $@
+tests/test_core: tests/test_core.c include/yes_toto.h
+	$(CC) $(CFLAGS) -Iinclude -o $@ tests/test_core.c
 ```
 
-- `-Isrc` makes `#include "args.h"` etc. resolve correctly inside `tests/`.
-- `src/main.o` is excluded from the test link to avoid a duplicate `main`.
-- Run all tests with: `make test`
+`fill_buffer()` lives as `static inline` in `yes_toto.h`, so the test TU compiles it directly (no link with `src/main.c`).
 
----
+## Required cases
 
-## Test Runner (`tests/test_runner.c`)
-
-Use a minimal hand-rolled test runner — no external frameworks:
-
-```c
-#include <stdio.h>
-#include <stdlib.h>
-
-/* Declared by each test file. */
-int test_args(void);
-int test_output(void);
-
-int main(void)
-{
-    int failed = 0;
-
-    failed += test_args();
-    failed += test_output();
-
-    if (failed == 0) {
-        printf("All tests passed.\n");
-        return EXIT_SUCCESS;
-    }
-
-    fprintf(stderr, "%d test(s) failed.\n", failed);
-    return EXIT_FAILURE;
-}
-```
-
-Each `test_*` function returns the number of failed assertions (0 = all passed).
-
----
-
-## Helper Macro
-
-Define a lightweight assertion macro in `tests/test_runner.c` or a shared `tests/test_utils.h`:
-
-```c
-#define ASSERT_EQ_STR(got, expected, label)                        \
-    do {                                                           \
-        if (strcmp((got), (expected)) != 0) {                      \
-            fprintf(stderr, "FAIL [%s]: expected \"%s\", got \"%s\"\n", \
-                    (label), (expected), (got));                   \
-            return 1;                                              \
-        }                                                          \
-        printf("PASS [%s]\n", (label));                            \
-    } while (0)
-
-#define ASSERT_EQ_INT(got, expected, label)                        \
-    do {                                                           \
-        if ((got) != (expected)) {                                 \
-            fprintf(stderr, "FAIL [%s]: expected %d, got %d\n",   \
-                    (label), (expected), (got));                   \
-            return 1;                                              \
-        }                                                          \
-        printf("PASS [%s]\n", (label));                            \
-    } while (0)
-```
-
----
-
-## Required Test Cases
-
-### Unit: `args_parse` — default output
-
-```c
-/* tests/test_args.c */
-#include "args.h"
-#include "test_utils.h"
-#include <string.h>
-
-int test_args(void)
-{
-    Args a;
-    char *argv[] = { "yes-toto", NULL };
-
-    ASSERT_EQ_INT(args_parse(1, argv, &a), 0, "args_parse: no args returns 0");
-    ASSERT_EQ_STR(a.output, "y", "args_parse: default output is y");
-    ASSERT_EQ_INT(a.show_help, 0, "args_parse: show_help is 0");
-    ASSERT_EQ_INT(a.show_version, 0, "args_parse: show_version is 0");
-    return 0;
-}
-```
-
-### Unit: `args_parse` — custom string
-
-```c
-char *argv2[] = { "yes-toto", "hello", NULL };
-ASSERT_EQ_INT(args_parse(2, argv2, &a), 0, "args_parse: custom arg returns 0");
-ASSERT_EQ_STR(a.output, "hello", "args_parse: output is hello");
-```
-
-### Unit: `args_parse` — multiple args joined
-
-```c
-char *argv3[] = { "yes-toto", "a", "b", "c", NULL };
-ASSERT_EQ_INT(args_parse(4, argv3, &a), 0, "args_parse: multi args returns 0");
-ASSERT_EQ_STR(a.output, "a b c", "args_parse: joined output is a b c");
-```
-
-### Unit: `args_parse` — `--help` flag
-
-```c
-char *argv4[] = { "yes-toto", "--help", NULL };
-ASSERT_EQ_INT(args_parse(2, argv4, &a), 0, "args_parse: --help returns 0");
-ASSERT_EQ_INT(a.show_help, 1, "args_parse: show_help is 1");
-```
-
-### Unit: `args_parse` — `--version` flag
-
-```c
-char *argv5[] = { "yes-toto", "--version", NULL };
-ASSERT_EQ_INT(args_parse(2, argv5, &a), 0, "args_parse: --version returns 0");
-ASSERT_EQ_INT(a.show_version, 1, "args_parse: show_version is 1");
-```
-
-### Unit: `args_parse` — unknown flag
-
-```c
-char *argv6[] = { "yes-toto", "--foo", NULL };
-ASSERT_EQ_INT(args_parse(2, argv6, &a), -1, "args_parse: unknown flag returns -1");
-```
-
-### Integration: default output reads N lines
-
-```c
-/* tests/test_output.c */
-#include <stdio.h>
-#include <string.h>
-#include "test_utils.h"
-
-#define BINARY "./yes-toto"
-#define LINES  5
-
-int test_output(void)
-{
-    FILE *pipe = popen(BINARY, "r");
-    if (!pipe) {
-        fprintf(stderr, "FAIL: could not spawn %s\n", BINARY);
-        return 1;
-    }
-
-    char line[256];
-    int i;
-    for (i = 0; i < LINES; i++) {
-        if (!fgets(line, sizeof(line), pipe)) {
-            fprintf(stderr, "FAIL: unexpected EOF at line %d\n", i);
-            pclose(pipe);
-            return 1;
-        }
-        /* Strip trailing newline. */
-        line[strcspn(line, "\n")] = '\0';
-        ASSERT_EQ_STR(line, "y", "output_loop: default line");
-    }
-
-    pclose(pipe); /* Closing pipe sends SIGPIPE — yes-toto must exit cleanly. */
-    return 0;
-}
-```
-
-### Integration: custom string
-
-```c
-FILE *pipe2 = popen(BINARY " hello", "r");
-/* read 3 lines, assert each equals "hello" */
-```
-
-### Integration: multiple args joined
-
-```c
-FILE *pipe3 = popen(BINARY " a b c", "r");
-/* read 3 lines, assert each equals "a b c" */
-```
-
----
-
-## Key Rules for Tests
-
-- **Always use `pclose()`** after reading — this closes the pipe, which sends SIGPIPE to `yes-toto` and causes it to exit cleanly. Never leave zombie processes.
-- **Never hardcode an absolute binary path** — always use the relative path `"./yes-toto"` which is valid after `make`.
-- **Never use `sleep()`** in tests — pipe closure is sufficient to stop the child.
-- **Test binary must not link `src/main.o`** — exclude it in the Makefile to avoid a duplicate `main` linker error.
-- **Each test function returns an int** — 0 for all passed, positive integer for the number of failures.
-- Run the full suite with: `make test`
-
+1. One-byte line packs the entire buffer (`return value == buf_size`).
+2. `line_len` divides `buf_size` — final copy ends on the buffer boundary.
+3. `line_len` does not divide `buf_size` — slack at the end is not written; return is a multiple of `line_len`.
+4. `line_len == buf_size` — exactly one copy.
+5. `line_len > buf_size` — **precondition violation** — document UB; do not rely on behaviour.
