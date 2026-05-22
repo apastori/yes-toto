@@ -27,7 +27,7 @@ cd /c/Users/alfon/Desktop/code/yes-toto
 make clean && make
 ```
 
-The resulting `yes-toto` is a native Windows executable and runs in UCRT64
+The resulting `yes-toto` is a native Windows executable and runs in UCRT64, Git Bash and CMD
 
 ### Linux
 
@@ -50,6 +50,8 @@ make clean && make
 
 ## Layout
 
+- `LICENSE.txt` — GNU General Public License, version 2.
+- `c_version.txt` — C11 standard, compiler flags, and toolchain notes.
 - `include/yes_toto.h` — constants, exit enum, `fill_buffer()`, `yes_toto_run()`.
 - `include/yes_toto_*.h` — declarations for emit, line build, CLI helpers.
 - `src/main.c` — entry point only.
