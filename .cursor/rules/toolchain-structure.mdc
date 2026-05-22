@@ -53,6 +53,8 @@ CC := $(shell command -v gcc >/dev/null 2>&1 && echo gcc || echo clang)
 
 ```
 yes-toto/
+├── LICENSE.txt          — GNU GPL v2 (full text)
+├── c_version.txt        — C11 / compiler / toolchain documentation
 ├── .cursor/rules/
 ├── Makefile
 ├── README.md

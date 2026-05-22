@@ -28,7 +28,7 @@ Keep `README.md` user-focused. Align with `project-overview.mdc` and `implementa
    - `0`: help, version, broken pipe (`EPIPE`; Linux also ignores `SIGPIPE` first)
    - `1`: write/setup errors; stderr format `yes-toto: <context>: <reason>`
 
-5. **Layout** — brief tree matching actual repo:
+5. **Layout** — brief tree matching actual repo (include `LICENSE.txt`, `c_version.txt`):
    - `include/yes_toto.h` + `yes_toto_*.h`
    - `src/main.c` + `yes_toto_{emit,write,line,cli}.c`
    - `tests/test_runner.c` + `test_fill_*.c` → `tests/test_core`
