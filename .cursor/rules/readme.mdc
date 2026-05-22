@@ -7,19 +7,40 @@ alwaysApply: false
 
 # README Requirements
 
-When generating or editing `README.md`, keep it user-focused and aligned with the current program behaviour (see `project-overview.mdc` and `implementation.mdc`).
+Keep `README.md` user-focused. Align with `project-overview.mdc` and `implementation.mdc`.
 
-## Suggested sections
+## Required sections (order)
 
-1. **Title & short description** — `yes`-like tool, infinite lines to stdout, broken pipe is normal.
-2. **Requirements** — GCC or Clang, GNU Make, POSIX-like environment for `sigaction` / `write`.
-3. **Building** — `make`, `make debug`, `make clean`, optional `make install`.
-4. **Usage** — default `y`, joined args, `""` → blank lines, `| head`, `--help`, `--version` (only those long options are special; there are no `-h` / `-v` aliases unless the code adds them).
-5. **Tests** — `make test` runs `tests/test_core.c` (`fill_buffer` unit tests only).
-6. **Exit codes** — `0` including `EPIPE`; `1` on other write/setup failures; stderr format as in `implementation.mdc`.
+1. **Title & description** — GNU `yes`-like; infinite lines to stdout; 64 KiB buffer + `write(2)` for performance.
+
+2. **Build**
+   - `make`, `make debug`, `make test`, `make clean`, optional `make install`
+   - **Linux:** `make clean && make`
+   - **Windows:** MSYS2 **UCRT64** terminal; `pacman -S make mingw-w64-ucrt-x86_64-gcc`; note Git Bash needs UCRT `bin` before Anaconda on `PATH`
+   - Native Windows `.exe` runs in UCRT64, Git Bash, CMD
+
+3. **Usage**
+   - Default `y`, joined args, empty string → blank lines
+   - `--help` / `--version` only (no `-h` / `-v`)
+   - `--help` anywhere in argv wins over `--version`
+
+4. **Exit codes**
+   - `0`: help, version, broken pipe (`EPIPE`; Linux also ignores `SIGPIPE` first)
+   - `1`: write/setup errors; stderr format `yes-toto: <context>: <reason>`
+
+5. **Layout** — brief tree matching actual repo:
+   - `include/yes_toto.h` + `yes_toto_*.h`
+   - `src/main.c` + `yes_toto_{emit,write,line,cli}.c`
+   - `tests/test_runner.c` + `test_fill_*.c` → `tests/test_core`
+
+## Do not document in README
+
+- Internal chain-of-thought comment blocks
+- `-Werror` flag rationale ( lives in `Makefile` comments )
+- Author/licence banners on `--version` (binary prints `yes-toto <version>` only)
 
 ## Style
 
-- Fenced `sh` or `bash` blocks for commands.
+- Fenced `sh` blocks for commands.
 - No emojis unless the user asks.
-- Do not promise author/licence banners on `--version` unless the binary actually prints them.
+- Keep prose minimal.

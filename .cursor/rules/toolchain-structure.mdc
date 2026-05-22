@@ -1,5 +1,5 @@
 ---
-description: C toolchain, build system setup, and directory structure for yes-toto
+description: C toolchain, build system, and directory structure for yes-toto
 globs: ["Makefile", "*.c", "*.h", "src/**/*.c", "include/**/*.h", "tests/**/*.c"]
 alwaysApply: false
 ---
@@ -8,21 +8,48 @@ alwaysApply: false
 
 ## Language
 
-**C11** (`-std=c11`), POSIX.1-2008 feature macro `-D_POSIX_C_SOURCE=200809L`. No C++.
+**C11** (`-std=c11`). **No C++.**
 
-## Compiler
+## Compiler flags (from `Makefile`)
 
-**GCC** (preferred) or **Clang**, selected in the `Makefile`. Required flags include `-Wall -Wextra -Wpedantic -Werror`. See `Makefile` comments for rationale.
+```
+-std=c11 -Wall -Wextra -Wpedantic -Werror
+-D_POSIX_C_SOURCE=200809L
+-Iinclude
+-O2          # release
+```
+
+Debug target adds `-g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer`.
+
+## Compiler selection
+
+`Makefile` picks **gcc** if available, else **clang**:
+
+```makefile
+CC := $(shell command -v gcc >/dev/null 2>&1 && echo gcc || echo clang)
+```
 
 ## Build system
 
-**GNU Make** with the root `Makefile`. Targets: `all` / `yes-toto`, `debug`, `test`, `clean`, `install`.
+**GNU Make** at repo root. Single link step for the main binary (no separate `.o` rules).
+
+| Target | Output |
+|--------|--------|
+| `make` / `all` | `yes-toto` |
+| `make debug` | `yes-toto-debug` |
+| `make test` | builds + runs `tests/test_core` |
+| `make clean` | removes `yes-toto`, `yes-toto-debug`, `tests/test_core` |
+| `make install` | `install -m 755 yes-toto /usr/local/bin` (Linux/macOS; needs sudo) |
+
+**Main sources:** `src/main.c`, `src/yes_toto_emit.c`, `src/yes_toto_write.c`, `src/yes_toto_line.c`, `src/yes_toto_cli.c`
+
+**Test sources:** `tests/test_runner.c`, `tests/test_fill_one_byte.c`, `tests/test_fill_divides_exact.c`, `tests/test_fill_indivisible.c`, `tests/test_fill_line_eq_buf.c`, `tests/test_fill_ub_note.c`
 
 ## Dependencies
 
-**libc only** (no extra `-l`). Headers may include POSIX APIs (`unistd.h`, `signal.h`, …).
+**libc only** — no extra `-l` flags. POSIX headers: `unistd.h`, `signal.h`, etc.
 
-## Directory layout (authoritative)
+## Directory layout
 
 ```
 yes-toto/
@@ -30,13 +57,55 @@ yes-toto/
 ├── Makefile
 ├── README.md
 ├── include/
-│   └── yes_toto.h
+│   ├── yes_toto.h
+│   ├── yes_toto_emit.h
+│   ├── yes_toto_line.h
+│   └── yes_toto_cli.h
 ├── src/
-│   └── main.c
+│   ├── main.c
+│   ├── yes_toto_emit.c
+│   ├── yes_toto_write.c
+│   ├── yes_toto_line.c
+│   └── yes_toto_cli.c
 └── tests/
-    └── test_core.c
+    ├── test_runner.c
+    ├── test_fill_one_byte.c / .h
+    ├── test_fill_divides_exact.c / .h
+    ├── test_fill_indivisible.c / .h
+    ├── test_fill_line_eq_buf.c / .h
+    └── test_fill_ub_note.c / .h
 ```
 
-- Public prototypes and `fill_buffer()` live in **`include/yes_toto.h`**.
-- **`src/main.c`** is the only compilation unit for the `yes-toto` binary (single TU build in `Makefile`).
-- **`tests/test_core.c`** compiles alone against the header (inline `fill_buffer`).
+Build artefacts (`yes-toto`, `yes-toto.exe`, `tests/test_core`, `tests/test_core.exe`) are gitignored.
+
+## Building on Linux
+
+```sh
+make clean && make && make test
+```
+
+## Building on Windows (MSYS2 UCRT64)
+
+**Recommended:** open **MSYS2 UCRT64** from the Start menu:
+
+```sh
+pacman -S make mingw-w64-ucrt-x86_64-gcc   # once
+cd /path/to/yes-toto
+make clean && make && make test
+```
+
+Produces a **native Windows executable** (`yes-toto` or `yes-toto.exe`). Runs in UCRT64, Git Bash, and CMD.
+
+### Git Bash caveat
+
+Git Bash can build if **`/c/msys64/ucrt64/bin` is early on `PATH`** (before Anaconda). Otherwise `gcc --version` may work while `cc1` fails silently (DLL load order). Prefer UCRT64 shell or:
+
+```bash
+PATH="/c/msys64/ucrt64/bin:$PATH" make
+```
+
+## Linking notes
+
+- `fill_buffer()` is `static inline` in `yes_toto.h` — compiled into `yes_toto_write.c` and each test TU.
+- Tests **do not** link `src/*.c`; they only exercise `fill_buffer()` via the header.
+- `main()` lives only in `src/main.c`.

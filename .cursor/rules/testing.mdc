@@ -1,6 +1,6 @@
 ---
-description: Unit test conventions for yes-toto (fill_buffer)
-globs: ["tests/**/*.c", "Makefile"]
+description: Unit test layout and conventions for yes-toto (fill_buffer)
+globs: ["tests/**/*.c", "tests/**/*.h", "Makefile"]
 alwaysApply: false
 ---
 
@@ -8,27 +8,58 @@ alwaysApply: false
 
 ## Scope
 
-Integration tests against a child process are optional; the Makefile `test` target builds and runs **`tests/test_core.c`** only.
+The Makefile `test` target builds and runs **`tests/test_core`** (or `tests/test_core.exe` on Windows).
+
+Tests cover **`fill_buffer()`** only. There are **no** subprocess/integration tests in-tree; the infinite output loop is not unit-tested.
+
+## Layout
+
+| File | Role |
+|------|------|
+| `tests/test_runner.c` | `main()` — invokes all suites in fixed order |
+| `tests/test_fill_one_byte.c` / `.h` | 1-byte line fills buffer completely |
+| `tests/test_fill_divides_exact.c` / `.h` | `line_len` divides `buf_size` evenly |
+| `tests/test_fill_indivisible.c` / `.h` | slack at end not written; return is multiple of `line_len` |
+| `tests/test_fill_line_eq_buf.c` / `.h` | `line_len == buf_size` → exactly one copy |
+| `tests/test_fill_ub_note.c` / `.h` | documents `line_len > buf_size` as precondition violation (UB); not exercised |
+
+One scenario per `.c` / `.h` pair; headers declare the test function for `test_runner.c`.
 
 ## Framework
 
 - No external framework — plain C with `<assert.h>`.
 - Each case prints `PASS: <descriptive name>` on success.
-- `assert()` failures call `abort()` and fail `make test` non-zero.
+- `assert()` failure → `abort()` → non-zero exit from `make test`.
 
-## Build
+## Build (from `Makefile`)
 
 ```makefile
-tests/test_core: tests/test_core.c include/yes_toto.h
-	$(CC) $(CFLAGS) -Iinclude -o $@ tests/test_core.c
+tests/test_core: $(TEST_SRCS) $(HDRS) $(wildcard tests/*.h)
+	$(CC) $(CFLAGS) -o $@ $(TEST_SRCS)
 ```
 
-`fill_buffer()` lives as `static inline` in `yes_toto.h`, so the test TU compiles it directly (no link with `src/main.c`).
+`fill_buffer()` comes from `#include "yes_toto.h"` in each test file — **no link with `src/*.c`**.
 
-## Required cases
+## Required cases (behaviour)
 
-1. One-byte line packs the entire buffer (`return value == buf_size`).
-2. `line_len` divides `buf_size` — final copy ends on the buffer boundary.
-3. `line_len` does not divide `buf_size` — slack at the end is not written; return is a multiple of `line_len`.
-4. `line_len == buf_size` — exactly one copy.
-5. `line_len > buf_size` — **precondition violation** — document UB; do not rely on behaviour.
+1. One-byte line: returned length `== buf_size`.
+2. Divisible: returned length `== buf_size`, multiple of `line_len`.
+3. Indivisible: e.g. buf 10, line `"abc"` → return 9; multiple of `line_len`.
+4. `line_len == buf_size`: one full `memcpy`.
+5. `line_len > buf_size`: **undefined** per API contract — print PASS note only; do not call `fill_buffer()`.
+
+## Adding tests
+
+- Add `tests/test_fill_<name>.c` + `.h`, declare runner function in `.h`, call from `test_runner.c`, append to `TEST_SRCS` in `Makefile`.
+- Keep tests allocation-free; stack buffers only.
+
+## Manual smoke tests (not automated)
+
+After `make`:
+
+```sh
+./yes-toto --version
+./yes-toto --help
+./yes-toto | head -n 3    # expect exit 0
+./yes-toto hello | head -n 1
+```

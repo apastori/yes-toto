@@ -1,79 +1,97 @@
 ---
-description: Canonical C11 implementation for yes-toto — layout, hot loop, SIGPIPE, buffer policy, and exit behaviour
+description: Canonical C11 implementation for yes-toto — module layout, hot loop, SIGPIPE, buffer policy, and exit behaviour
 globs: ["src/**/*.c", "include/**/*.h"]
 alwaysApply: false
 ---
 
 # yes-toto — Implementation (C11)
 
-## Layout
+## Module layout
 
 | Path | Role |
 |------|------|
-| `include/yes_toto.h` | `YES_TOTO_BUF_SIZE`, `YES_TOTO_VERSION_STRING`, `fill_buffer()`, `yes_toto_run()` |
-| `src/main.c` | argv / `--help` / `--version`, join line, `sigaction(SIGPIPE, SIG_IGN)`, `write()` loop |
-| `tests/test_core.c` | `assert()` tests for `fill_buffer()` |
+| `include/yes_toto.h` | `YES_TOTO_BUF_SIZE` (65536), `YES_TOTO_VERSION_STRING`, `YES_TOTO_EXIT_*` enum, `fill_buffer()` (`static inline`), `yes_toto_run()` declaration |
+| `include/yes_toto_emit.h` | `yes_toto_emit_error()` |
+| `include/yes_toto_line.h` | `build_output_line()` |
+| `include/yes_toto_cli.h` | `scan_meta_flags()`, `print_help()`, `print_version()`, `install_sigpipe_ignore()` |
+| `src/main.c` | `main()` only — dispatch help/version, setup, build line, call `yes_toto_run()` |
+| `src/yes_toto_emit.c` | stderr diagnostics: `yes-toto: <context>: <strerror(errno)>` |
+| `src/yes_toto_write.c` | `yes_toto_run()`, static `try_write_all()`, hot `write()` loop |
+| `src/yes_toto_line.c` | Join `argv[1…]` with spaces + `\n`; stack buffer or one pre-loop `malloc` |
+| `src/yes_toto_cli.c` | Meta-flag scan, help/version text, platform-specific SIGPIPE setup |
 
-Older sketches that split `args.c` / `output.c` are **obsolete**; the tree above is authoritative.
+Each `.c` file opens with a **chain-of-thought comment block** (responsibility, syscalls, heap in hot loop, throughput, C standard). Preserve that pattern when adding files.
 
 ## C standard
 
-The project targets **ISO C11** (`-std=c11`) for `static inline` in headers, `static_assert` if needed later, and consistent linkage with `_POSIX_C_SOURCE=200809L` for POSIX.1-2008 APIs (`sigaction`, `write`, etc.).
+**ISO C11** (`-std=c11`), `-D_POSIX_C_SOURCE=200809L` for Linux POSIX.1-2008 (`sigaction`, `write`, etc.).
+MinGW builds define `_WIN32`; signal setup is guarded there (see below).
 
 ## Buffer size (64 KiB)
 
-`YES_TOTO_BUF_SIZE` is **65536** bytes. Rationale: keeps the prefill slab in L2-friendly range while aligning with typical pipe buffering on Linux, so each `write()` often moves a full chunk and amortises syscall overhead versus per-line I/O.
+`YES_TOTO_BUF_SIZE` is **65536** bytes.
 
-## Hot loop rules
+Rationale: L2-friendly prefill slab; aligns with typical pipe buffer sizes on Linux; amortises `write()` syscalls versus per-line I/O.
 
-Allowed:
+`fill_buffer()` copies only **complete** lines into the slab. If `line_len > YES_TOTO_BUF_SIZE`, `yes_toto_run()` skips `fill_buffer()` and writes one line per outer iteration (pathological fallback, not the common path).
 
-- `write(STDOUT_FILENO, …)` with an outer loop retrying until the current prefill is fully drained (partial writes).
-- `fill_buffer()` to pack full logical lines (including trailing `\n`) into a stack `char buf[YES_TOTO_BUF_SIZE]`.
+## Hot loop (`src/yes_toto_write.c`)
 
-Forbidden in the hot loop:
+**Allowed:**
 
-- `printf` / `fprintf` / `puts` / `fwrite` (stdio locking and formatting overhead; spec forbids printf-family in the loop).
-- `malloc` / `calloc` / `realloc`.
+- Stack `char buf[YES_TOTO_BUF_SIZE]` prefilled via `fill_buffer()`
+- `write(STDOUT_FILENO, …)` in a loop until the current chunk is fully sent (partial writes retried; `EINTR` retried)
 
-If `line_len > YES_TOTO_BUF_SIZE`, the program **never** calls `fill_buffer()` for that line; it falls back to writing one full line per outer iteration (still handling partial `write()` results).
+**Forbidden:**
 
-## SIGPIPE / EPIPE
+- `printf` / `fprintf` / `puts` / `fputs` / `fwrite`
+- `malloc` / `calloc` / `realloc`
 
-Default `SIGPIPE` termination is wrong for `yes`: consumer exit should yield **exit 0**.
+On `EPIPE`: `fflush(stdout)` (ignore return value), then `exit(YES_TOTO_EXIT_OK_PIPE)` (0).
+On other write errors: `yes_toto_emit_error("write")`, `exit(1)`.
 
-Correct POSIX pattern: `sigaction(SIGPIPE, SIG_IGN, NULL)`. Then `write()` returns **-1** with `errno == EPIPE` when the pipe breaks. On `EPIPE`, call `fflush(stdout)` (ignore its return value — the pipe is already broken), then `exit(0)`.
+## SIGPIPE / EPIPE (cross-platform)
+
+| Platform | `install_sigpipe_ignore()` | Broken pipe |
+|----------|----------------------------|-------------|
+| **Linux / POSIX** | `sigaction(SIGPIPE, SIG_IGN, NULL)` | `write()` → `errno == EPIPE` |
+| **Windows / MinGW (`_WIN32`)** | **No-op** (returns 0) — no `SIGPIPE` | `write()` failure; CRT often sets `EPIPE` |
+
+Default `SIGPIPE` termination is wrong for `yes` on Linux; ignoring it is the POSIX idiom so `write()` fails with `EPIPE` instead.
 
 ## Exit codes
 
-| Code | Meaning |
-|------|---------|
-| `0` | Normal completion: `--help` / `--version`, or broken pipe (`EPIPE`) |
-| `1` | Any other `write()` failure or fatal setup error (`sigaction`, OOM building the line) |
-
-No other exit codes are used.
+| Code | Constant | Meaning |
+|------|----------|---------|
+| `0` | `YES_TOTO_EXIT_OK_PIPE` | `--help`, `--version`, or broken pipe |
+| `1` | `YES_TOTO_EXIT_WRITE_ERR` | Write/setup failure, OOM in `build_output_line`, or `sigaction` failure (Linux) |
 
 ## Error messages
 
-All diagnostics go to **stderr**, one line:
+All diagnostics on **stderr**, one line:
 
 `yes-toto: <context>: <strerror(errno)>`
 
 Never print errors to stdout.
 
-## Argument parsing
+## Argument parsing (`src/yes_toto_cli.c`, `src/yes_toto_line.c`)
 
-- Scan **all** of `argv[1…]` before joining: if any argument equals `--help`, print help and exit 0 (**wins over** `--version`).
-- Else if any equals `--version`, print `yes-toto <version>` and exit 0.
-- Else join `argv[1…]` with single spaces, append `\n`, and print forever.
-- Replicates GNU `yes` for strings like `--foo` — those are **not** errors; only the exact tokens `--help` and `--version` are special.
+1. Scan **all** `argv[1…]`: exact `--help` → help + exit 0 (**wins** over `--version`).
+2. Else exact `--version` → `yes-toto <version>\n` + exit 0.
+3. Else join `argv[1…]` with single spaces, append `\n`, run forever.
+4. No args → default line `"y\n"`.
+5. Strings like `--foo` or `-` are **output**, not errors (GNU `yes` behaviour).
 
-**Deviation (justified):** lines longer than `YES_TOTO_JOIN_STACK_CAP` use a **single `malloc()`** before the infinite loop (not in the hot path) so arbitrarily large `argv` joins remain correct without megabyte VLAs.
+**Justified deviation:** joined lines longer than `YES_TOTO_JOIN_STACK_CAP` (65536) use a **single `malloc()`** before the loop — not in the hot path.
 
 ## `fill_buffer()` contract
 
-See `include/yes_toto.h`. Preconditions require `line_len > 0` and `line_len <= buf_size`. If `line_len > buf_size`, the behaviour is **undefined** — callers must not invoke `fill_buffer()` in that case.
+In `include/yes_toto.h`:
+
+- **Precondition:** `line_len > 0 && line_len <= buf_size`
+- **Postcondition:** return value is a multiple of `line_len`, `<= buf_size`
+- **`line_len > buf_size`:** precondition violated — **undefined**; callers must use the pathological write path in `yes_toto_write.c`
 
 ## Naming
 
-The spec’s “`run`” entry point is implemented as **`yes_toto_run()`** to avoid a generic `run` symbol in the global namespace.
+Public run entry point: **`yes_toto_run()`** (not bare `run`).

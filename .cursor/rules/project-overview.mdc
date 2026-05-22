@@ -14,6 +14,17 @@ It outputs a string (default: `y`) followed by a newline, in an infinite loop, t
 ## Binary Name
 
 The compiled binary must always be named **`yes-toto`**. Never rename it.
+On Windows, MinGW may also emit `yes-toto.exe`; that is the same program.
+
+## Platforms
+
+| Platform | Build environment | Notes |
+|----------|-------------------|-------|
+| **Linux** | `gcc`/`clang` + GNU Make | Full POSIX path: `sigaction(SIGPIPE, SIG_IGN)` |
+| **Windows** | **MSYS2 UCRT64** (recommended) | Native Windows `.exe`; `install_sigpipe_ignore()` is a no-op under `_WIN32` |
+| **Git Bash** | Works if `/c/msys64/ucrt64/bin` is **before** Anaconda on `PATH` | Same binary as UCRT64; see `toolchain-structure.mdc` |
+
+Binaries are **not portable** across OSes — build separately on Linux and on Windows.
 
 ## Scope — Keep It Minimal
 
@@ -27,6 +38,7 @@ Supporting behaviour:
 - Interactive or TUI modes
 - stdin reading
 - Logging or debug output in normal operation
+- `-h` / `-v` short flags (only exact `--help` and `--version` are special)
 - Any feature that would break GNU `yes` behavioural compatibility
 
 ## Behavioural Contract
@@ -41,6 +53,21 @@ Supporting behaviour:
 | `yes-toto --version` | prints `yes-toto <version>\n`, exits `0` |
 | `yes-toto --help` | prints usage on stdout, exits `0` |
 
-## Implementation Notes
+## Exit Codes
 
-See `implementation.mdc` for C11, 64 KiB buffer policy, `SIGPIPE` handling, hot-loop restrictions, stderr format, and justified deviations (e.g. optional `malloc` for very long joined argv strings before the loop).
+| Code | Meaning |
+|------|---------|
+| `0` | `--help`, `--version`, or broken pipe (`EPIPE` on `write`) |
+| `1` | Other `write()` failure, OOM building the joined line, or `sigaction` failure (Linux only) |
+
+No other exit codes.
+
+## Project Layout (summary)
+
+```
+include/   — yes_toto.h + yes_toto_{emit,line,cli}.h
+src/       — main.c + yes_toto_{emit,write,line,cli}.c
+tests/     — test_runner.c + test_fill_*.c / .h → binary tests/test_core
+```
+
+See `implementation.mdc`, `toolchain-structure.mdc`, and `testing.mdc` for detail.

@@ -1,52 +1,75 @@
 ---
 description: C code style, formatting, naming, and quality rules for yes-toto
-globs: ["src/**/*.c", "include/**/*.h", "tests/**/*.c", "Makefile"]
+globs: ["src/**/*.c", "include/**/*.h", "tests/**/*.c", "tests/**/*.h", "Makefile"]
 alwaysApply: false
 ---
 
 # Code Style & Quality
 
-## Standard & toolchain
+## Standard & flags
 
-- **C11** (`-std=c11`), `-Wall -Wextra -Wpedantic -Werror`, `-D_POSIX_C_SOURCE=200809L`.
+- **C11** (`-std=c11`)
+- `-Wall -Wextra -Wpedantic -Werror`
+- `-D_POSIX_C_SOURCE=200809L`
+- Zero warnings — all treated as errors
 
 ## Formatting
 
 - **Indentation:** 4 spaces. No tabs.
-- **Function definitions:** opening brace on its own line (see `src/main.c`).
+- **Function definitions:** opening brace on its own line.
 - **Line length:** prefer ≤80 characters where practical.
 - **Files end with a single newline.**
 
-## Layout
+## Module conventions
 
-- `include/yes_toto.h` — `static inline` **`fill_buffer()`** is intentional (included by `tests/test_core.c` without linking `main.c`).
-- `src/main.c` — argv, meta flags, join buffer, **`write()`** loop. No separate `args.c` / `output.c`.
+- **`src/main.c`** stays thin — wiring only; no hot loop, no business logic beyond dispatch.
+- **`include/yes_toto.h`** — `static inline fill_buffer()` is intentional (shared by `yes_toto_write.c` and tests without linking `src/`).
+- **One concern per `src/yes_toto_*.c`** — do not collapse back into a monolith without reason.
+- **Platform code:** use `#if defined(_WIN32)` / `#else` for OS-specific behaviour (see `install_sigpipe_ignore()` in `yes_toto_cli.c`).
 
 ## Naming
 
-- Functions: `snake_case` (`yes_toto_run`, `fill_buffer`).
-- Macros / constants: `UPPER_SNAKE_CASE` (`YES_TOTO_BUF_SIZE`).
+| Kind | Style | Examples |
+|------|-------|----------|
+| Functions | `snake_case` | `yes_toto_run`, `fill_buffer`, `build_output_line` |
+| Macros / constants | `UPPER_SNAKE_CASE` | `YES_TOTO_BUF_SIZE`, `YES_TOTO_JOIN_STACK_CAP` |
+| Headers | `YES_TOTO_*_H` guards | `YES_TOTO_H`, `YES_TOTO_CLI_H` |
+
+Public API prefix: **`yes_toto_`** for module entry points; `fill_buffer` is the spec name for the inline helper.
 
 ## Memory
 
-- **Hot loop:** no `malloc` / `stdio` formatting. Stack buffer `char buf[YES_TOTO_BUF_SIZE]` for prefilled slab.
-- **Before the loop only:** `malloc` is permitted when the joined argv line exceeds `YES_TOTO_JOIN_STACK_CAP` (see `implementation.mdc` deviation). No `realloc` in-tree.
+- **Hot loop:** stack only — `char buf[YES_TOTO_BUF_SIZE]`; no heap, no stdio formatting.
+- **Pre-loop:** one optional `malloc()` in `build_output_line()` when joined line exceeds `YES_TOTO_JOIN_STACK_CAP` (65536).
+- No `realloc` in-tree.
 
-## Hot loop rules
+## Hot loop rules (`yes_toto_write.c`)
 
-- Use `write(STDOUT_FILENO, …)` with partial-write retry. No `printf` / `fprintf` / `puts` / `fputs` / `fwrite` inside the loop.
-- `exit()` on `EPIPE` after `fflush(stdout)` inside the low-level writer is required so broken pipes yield status `0`; real write faults exit `1`.
+- `write(STDOUT_FILENO, …)` with partial-write and `EINTR` retry.
+- No `printf` / `fprintf` / `puts` / `fputs` / `fwrite` inside the loop.
+- `exit()` on `EPIPE` (status 0) or unrecoverable write error (status 1) inside `try_write_all()` / `yes_toto_run()` is acceptable — these functions do not return on the output path.
 
 ## Errors
 
-- **stderr** only, format: `yes-toto: <context>: <strerror(errno)>`.
+- **stderr only:** `yes-toto: <context>: <strerror(errno)>`
+- Implemented in `yes_toto_emit.c`
+
+## Comments
+
+- Chain-of-thought block at top of each `src/*.c` and test file (see existing files).
+- Contract comments on non-trivial functions: preconditions, postconditions, return value, error behaviour.
+- Comment non-obvious decisions (buffer size, platform guards); not obvious code.
 
 ## Tests
 
-- Plain `assert()` in `tests/test_core.c` is allowed; `assert` failure implies `abort()` (non-zero `make test`).
+- Plain `assert()` — no external test framework.
+- One scenario per `tests/test_fill_*.c`; runner in `tests/test_runner.c`.
+- Print `PASS: <name>` on success.
 
 ## What not to do
 
 - Do not compile as C++.
-- Do not add libc dependencies beyond the platform C library.
-- Do not use `gets`, unbounded `scanf`, or ignore `write()` return counts without looping.
+- Do not link libraries beyond libc.
+- Do not use `gets`, unbounded `scanf`, or ignore `write()` byte counts.
+- Do not add `-h` / `-v` unless explicitly requested (breaks current contract).
+- Do not use `fwrite` in the hot loop — project standard is raw `write()`.
