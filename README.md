@@ -15,7 +15,25 @@ make clean
 sudo make install   # installs to /usr/local/bin (optional)
 ```
 
-Requires a POSIX-like environment with `gcc` or `clang`, `sigaction`, and `write`.
+Requires `gcc` or `clang` and `write(2)` (POSIX-like systems). On Linux, `sigaction` is used for `SIGPIPE`; on Windows (MSYS2 UCRT64 MinGW) build natively — see below.
+
+### Windows (MSYS2 UCRT64)
+
+Build from the **MSYS2 UCRT64** terminal (recommended):
+
+```sh
+pacman -S make mingw-w64-ucrt-x86_64-gcc   # if not already installed
+cd /c/Users/alfon/Desktop/code/yes-toto
+make clean && make
+```
+
+The resulting `yes-toto` is a native Windows executable and runs in UCRT64
+
+### Linux
+
+```sh
+make clean && make
+```
 
 ## Usage
 
@@ -27,11 +45,13 @@ Requires a POSIX-like environment with `gcc` or `clang`, `sigaction`, and `write
 
 ## Exit codes
 
-- `0` — normal close (including broken pipe / `EPIPE` after ignoring `SIGPIPE`).
+- `0` — normal close (including broken pipe / `EPIPE`; on Linux after ignoring `SIGPIPE`).
 - `1` — write or setup error (messages on stderr: `yes-toto: <context>: <reason>`).
 
 ## Layout
 
-- `include/yes_toto.h` — constants, `fill_buffer()`, `yes_toto_run()`.
-- `src/main.c` — argv handling, `SIGPIPE` setup, buffered write loop.
-- `tests/test_core.c` — `assert()`-based tests.
+- `include/yes_toto.h` — constants, exit enum, `fill_buffer()`, `yes_toto_run()`.
+- `include/yes_toto_*.h` — declarations for emit, line build, CLI helpers.
+- `src/main.c` — entry point only.
+- `src/yes_toto_emit.c`, `yes_toto_write.c`, `yes_toto_line.c`, `yes_toto_cli.c` — implementation units.
+- `tests/test_runner.c` plus `tests/test_fill_*.c` / `.h` — `assert()`-based `fill_buffer` tests; built binary `tests/test_core`.
