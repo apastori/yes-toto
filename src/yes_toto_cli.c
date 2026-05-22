@@ -103,6 +103,13 @@ void print_version(void)
  */
 int install_sigpipe_ignore(void)
 {
+#if defined(_WIN32)
+    /*
+     * MinGW/Windows: no SIGPIPE. Broken pipes are reported via write()
+     * (see try_write_all in yes_toto_write.c); nothing to configure here.
+     */
+    return 0;
+#else
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = SIG_IGN;
@@ -111,4 +118,5 @@ int install_sigpipe_ignore(void)
         return -1;
     }
     return 0;
+#endif
 }

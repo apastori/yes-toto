@@ -19,20 +19,35 @@ CFLAGS := $(CFLAGS_COMMON) -O2
 CFLAGS_DEBUG := $(CFLAGS_COMMON) -g -O1 -fsanitize=address,undefined \
 	-fno-omit-frame-pointer
 
+MAIN_SRCS := src/main.c \
+	src/yes_toto_emit.c \
+	src/yes_toto_write.c \
+	src/yes_toto_line.c \
+	src/yes_toto_cli.c
+
+HDRS := $(wildcard include/*.h)
+
+TEST_SRCS := tests/test_runner.c \
+	tests/test_fill_one_byte.c \
+	tests/test_fill_divides_exact.c \
+	tests/test_fill_indivisible.c \
+	tests/test_fill_line_eq_buf.c \
+	tests/test_fill_ub_note.c
+
 .PHONY: all debug test clean install
 
 all: yes-toto
 
-yes-toto: src/main.c include/yes_toto.h
-	$(CC) $(CFLAGS) -o $@ src/main.c
+yes-toto: $(MAIN_SRCS) $(HDRS)
+	$(CC) $(CFLAGS) -o $@ $(MAIN_SRCS)
 
 debug: yes-toto-debug
 
-yes-toto-debug: src/main.c include/yes_toto.h
-	$(CC) $(CFLAGS_DEBUG) -o $@ src/main.c
+yes-toto-debug: $(MAIN_SRCS) $(HDRS)
+	$(CC) $(CFLAGS_DEBUG) -o $@ $(MAIN_SRCS)
 
-tests/test_core: tests/test_core.c include/yes_toto.h
-	$(CC) $(CFLAGS) -o $@ tests/test_core.c
+tests/test_core: $(TEST_SRCS) $(HDRS) $(wildcard tests/*.h)
+	$(CC) $(CFLAGS) -o $@ $(TEST_SRCS)
 
 test: tests/test_core
 	./tests/test_core
