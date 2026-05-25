@@ -27,8 +27,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define YES_TOTO_ARG_HELP    "--help"
-#define YES_TOTO_ARG_VERSION "--version"
+#define YES_TOTO_ARG_HELP         "--help"
+#define YES_TOTO_ARG_HELP_SHORT   "--h"
+#define YES_TOTO_ARG_VERSION      "--version"
+#define YES_TOTO_ARG_VERSION_SHORT "--v"
 
 /* Set by SIGINT / Ctrl+C handlers; consumed on the main thread in the write loop. */
 static volatile sig_atomic_t yes_toto_stop_requested = 0;
@@ -51,19 +53,21 @@ static int argv_has_exact(int argc, char **argv, const char *needle)
 
 /*
  * scan_meta_flags — Step 7: scan all argv[1..] before interpreting strings.
- * --help wins over --version when both appear.
+ * --help / --h wins over --version / --v when both appear.
  *
  * Preconditions: argc >= 1.
  * Postconditions: sets *help or *version when those tokens appear anywhere.
  */
 void scan_meta_flags(int argc, char **argv, int *help, int *version)
 {
-    *help = argv_has_exact(argc, argv, YES_TOTO_ARG_HELP);
+    *help = argv_has_exact(argc, argv, YES_TOTO_ARG_HELP)
+         || argv_has_exact(argc, argv, YES_TOTO_ARG_HELP_SHORT);
     *version = 0;
     if (*help) {
         return;
     }
-    *version = argv_has_exact(argc, argv, YES_TOTO_ARG_VERSION);
+    *version = argv_has_exact(argc, argv, YES_TOTO_ARG_VERSION)
+            || argv_has_exact(argc, argv, YES_TOTO_ARG_VERSION_SHORT);
 }
 
 /*
@@ -83,8 +87,8 @@ void print_help(void)
         "With no STRING, print 'y'.\n"
         "\n"
         "Options:\n"
-        "  --help     display this help and exit\n"
-        "  --version  display version and exit\n"
+        "  --help, --h     display this help and exit\n"
+        "  --version, --v  display version and exit\n"
     );
 }
 
