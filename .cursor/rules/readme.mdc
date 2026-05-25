@@ -21,8 +21,8 @@ Keep `README.md` user-focused. Align with `project-overview.mdc` and `implementa
 
 3. **Usage**
    - Default `y`, joined args, empty string → blank lines
-   - `--help` / `--version` only (no `-h` / `-v`)
-   - `--help` anywhere in argv wins over `--version`
+   - `--help` / `--h` and `--version` / `--v` (no single-dash `-h` / `-v`)
+   - help anywhere in argv wins over version
    - **Pipes and terminals** table: TTY vs pipe write pattern; Windows `EINVAL` → `EPIPE` note for pipes
 
 4. **Exit codes**

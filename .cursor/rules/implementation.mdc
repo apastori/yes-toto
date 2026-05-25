@@ -97,8 +97,8 @@ Never print errors to stdout.
 
 ## Argument parsing (`src/yes_toto_cli.c`, `src/yes_toto_line.c`)
 
-1. Scan **all** `argv[1…]`: exact `--help` → help + exit 0 (**wins** over `--version`).
-2. Else exact `--version` → `yes-toto <version>\n` + exit 0.
+1. Scan **all** `argv[1…]`: exact `--help` or `--h` → help + exit 0 (**wins** over version).
+2. Else exact `--version` or `--v` → `yes-toto <version>\n` + exit 0.
 3. Else join `argv[1…]` with single spaces, append `\n`, run forever.
 4. No args → default line `"y\n"`.
 5. Strings like `--foo` or `-` are **output**, not errors (GNU `yes` behaviour).
