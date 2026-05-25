@@ -42,7 +42,9 @@
 
 enum {
     YES_TOTO_EXIT_OK_PIPE = 0,
-    YES_TOTO_EXIT_WRITE_ERR = 1
+    YES_TOTO_EXIT_WRITE_ERR = 1,
+    /* Conventional shell status when stopped by Ctrl+C / SIGINT (128 + 2). */
+    YES_TOTO_EXIT_SIGINT = 130
 };
 
 /*

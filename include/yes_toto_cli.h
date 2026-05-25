@@ -5,5 +5,7 @@ void scan_meta_flags(int argc, char **argv, int *help, int *version);
 void print_help(void);
 void print_version(void);
 int install_sigpipe_ignore(void);
+int install_sigint_handler(void);
+void yes_toto_exit_if_stop_requested(void);
 
 #endif /* YES_TOTO_CLI_H */
