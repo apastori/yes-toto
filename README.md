@@ -44,9 +44,10 @@ make clean && make
 
 - `yes-toto` — prints `y` plus newline forever.
 - `yes-toto STRING ...` — prints the arguments joined by single spaces, plus newline, forever.
-- `yes-toto --help` / `yes-toto --version` — print help or version and exit.
+- `yes-toto --help` / `yes-toto --h` — print help and exit.
+- `yes-toto --version` / `yes-toto --v` — print version and exit.
 
-`--help` is detected anywhere in the argument list and takes precedence over `--version`.
+Help is detected anywhere in the argument list and takes precedence over version (`--help` or `--h` over `--version` or `--v`).
 
 ### Pipes and terminals
 
