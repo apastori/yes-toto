@@ -19,10 +19,27 @@ POSIX feature macro
 
 Exposes POSIX.1-2008 interfaces used on Linux, notably:
   - write(2)           (unistd.h)   — hot output loop
-  - sigaction(2)       (signal.h)   — SIGPIPE ignore (Linux only)
+  - isatty(3)          (unistd.h)   — TTY vs pipe output mode
+  - sigaction(2)       (signal.h)   — SIGPIPE ignore, SIGINT handler (Linux)
 
 On Windows (_WIN32), install_sigpipe_ignore() is a no-op; there is no
-SIGPIPE. Broken pipes are handled via write() and errno (often EPIPE).
+SIGPIPE. Broken pipes are handled via write() and errno (EPIPE or EINVAL);
+maybe_normalize_broken_pipe_errno() in yes_toto_write.c remaps EINVAL on
+pipe fds to EPIPE.
+
+Output modes (yes_toto_run in yes_toto_write.c)
+------------------------------------------------
+- Terminal (isatty(STDOUT_FILENO)): one line per outer loop — same idea as
+  GNU yes (fwrite one line); keeps Git Bash, UCRT64, cmd, and PowerShell
+  responsive; Ctrl+C checked between writes.
+- Pipe / redirect: fill_buffer() + 64 KiB write loop for throughput.
+
+Interrupt handling (yes_toto_cli.c)
+-----------------------------------
+- install_sigint_handler(): SIGINT sets yes_toto_stop_requested; the write
+  loop on the main thread calls _exit(130). Handlers do not call _exit
+  directly (avoids frozen MSYS/Git Bash PTYs). No SetConsoleCtrlHandler.
+- EINTR from write(): _exit(130).
 
 Release compiler flags (from Makefile)
 --------------------------------------
@@ -53,8 +70,8 @@ C standard library headers used (representative)
 <stdio.h>    printf, fprintf, fflush (not in hot loop)
 <stdlib.h>   malloc, exit
 <errno.h>    errno, strerror
-<signal.h>   sigaction, SIGPIPE (Linux path in yes_toto_cli.c)
-<unistd.h>   write, STDOUT_FILENO
+<signal.h>   sigaction, SIGINT, SIGPIPE (yes_toto_cli.c)
+<unistd.h>   write, isatty, STDOUT_FILENO
 <assert.h>   unit tests only
 
 Further reading

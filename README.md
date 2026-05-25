@@ -1,9 +1,14 @@
 # yes-toto
 
 A small C11 utility that behaves like GNU `yes`: it repeatedly prints a line
-until stdout closes (for example at the end of a pipe). It uses a 64 KiB
-prefetch buffer and `write(2)` so the hot path avoids stdio formatting and
-minimises syscalls.
+until stdout closes (for example at the end of a pipe) or you stop it with
+Ctrl+C. It uses raw `write(2)` in the hot path (no stdio formatting in the
+loop).
+
+**Output strategy:** when stdout is a **terminal**, the program writes **one
+line per loop** (like GNU `yes`) so the emulator stays responsive and Ctrl+C
+works reliably. When stdout is a **pipe** or file, it prefills a **64 KiB**
+slab via `fill_buffer()` to amortise syscalls (`yes-toto | head`, etc.).
 
 ## Build
 
@@ -27,7 +32,7 @@ cd /c/Users/alfon/Desktop/code/yes-toto
 make clean && make
 ```
 
-The resulting `yes-toto` is a native Windows executable and runs in UCRT64, Git Bash and CMD
+The resulting `yes-toto` is a native Windows executable and runs in UCRT64, Git Bash, cmd, and PowerShell.
 
 ### Linux
 
@@ -43,10 +48,20 @@ make clean && make
 
 `--help` is detected anywhere in the argument list and takes precedence over `--version`.
 
+### Pipes and terminals
+
+| stdout destination | Write pattern | Example |
+|--------------------|---------------|---------|
+| Terminal (`isatty`) | one line per loop | `./yes-toto` — Ctrl+C exits **130** |
+| Pipe or redirect | 64 KiB prefill slab | `./yes-toto \| head -n 5` — exits **0** when `head` closes the pipe |
+
+On Windows (MinGW), a broken pipe may surface as `EINVAL` instead of `EPIPE`; the write path normalises that to `EPIPE` so piped use stays quiet (no stderr error).
+
 ## Exit codes
 
-- `0` — normal close (including broken pipe / `EPIPE`; on Linux after ignoring `SIGPIPE`).
+- `0` — normal close: `--help`, `--version`, or broken pipe (`EPIPE`; on Linux after ignoring `SIGPIPE`).
 - `1` — write or setup error (messages on stderr: `yes-toto: <context>: <reason>`).
+- `130` — stopped by Ctrl+C / `SIGINT` (`128 + 2`, conventional shell status).
 
 ## Layout
 
