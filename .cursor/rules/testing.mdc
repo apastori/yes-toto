@@ -60,6 +60,7 @@ After `make`:
 ```sh
 ./yes-toto --version
 ./yes-toto --help
-./yes-toto | head -n 3    # expect exit 0
+./yes-toto | head -n 3    # expect exit 0, no stderr (pipe / 64 KiB path)
 ./yes-toto hello | head -n 1
+# Interactive: ./yes-toto then Ctrl+C — expect exit 130; terminal stays responsive
 ```

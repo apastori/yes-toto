@@ -9,7 +9,9 @@ alwaysApply: true
 ## What This Project Is
 
 `yes-toto` is a faithful CLI replica of the GNU Core Utilities `yes` command.
-It outputs a string (default: `y`) followed by a newline, in an infinite loop, to stdout — until killed by a signal or a broken pipe closes stdout (treated as exit status `0`).
+It outputs a string (default: `y`) followed by a newline, in an infinite loop, to stdout — until stopped with Ctrl+C (exit `130`) or a broken pipe closes stdout (exit `0`).
+
+On a **terminal**, output is one line per loop (like GNU `yes`). On a **pipe**, a 64 KiB prefill slab is used for throughput.
 
 ## Binary Name
 
@@ -45,11 +47,11 @@ Supporting behaviour:
 
 | Invocation | Output |
 |---|---|
-| `yes-toto` | prints `y\n` forever |
+| `yes-toto` | prints `y\n` forever (one line per write); Ctrl+C → exit `130` |
 | `yes-toto hello` | prints `hello\n` forever |
 | `yes-toto a b c` | prints `a b c\n` forever (args joined with space) |
 | `yes-toto ""` | prints `\n` forever |
-| `yes-toto \| head -n5` | prints 5 lines; exits `0` on broken pipe |
+| `yes-toto \| head -n5` | prints 5 lines; exits `0` on broken pipe (64 KiB pipe path) |
 | `yes-toto --version` | prints `yes-toto <version>\n`, exits `0` |
 | `yes-toto --help` | prints usage on stdout, exits `0` |
 
@@ -58,9 +60,8 @@ Supporting behaviour:
 | Code | Meaning |
 |------|---------|
 | `0` | `--help`, `--version`, or broken pipe (`EPIPE` on `write`) |
-| `1` | Other `write()` failure, OOM building the joined line, or `sigaction` failure (Linux only) |
-
-No other exit codes.
+| `1` | Other `write()` failure, OOM building the joined line, or signal setup failure |
+| `130` | Ctrl+C / `SIGINT` (`YES_TOTO_EXIT_SIGINT`, `128 + 2`) |
 
 ## Project Layout (summary)
 

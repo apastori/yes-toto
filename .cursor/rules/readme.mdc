@@ -11,22 +11,24 @@ Keep `README.md` user-focused. Align with `project-overview.mdc` and `implementa
 
 ## Required sections (order)
 
-1. **Title & description** — GNU `yes`-like; infinite lines to stdout; 64 KiB buffer + `write(2)` for performance.
+1. **Title & description** — GNU `yes`-like; infinite lines to stdout; raw `write(2)` in the hot loop. **Terminal:** one line per loop (like GNU `yes`). **Pipe:** 64 KiB prefill via `fill_buffer()` for throughput.
 
 2. **Build**
    - `make`, `make debug`, `make test`, `make clean`, optional `make install`
    - **Linux:** `make clean && make`
    - **Windows:** MSYS2 **UCRT64** terminal; `pacman -S make mingw-w64-ucrt-x86_64-gcc`; note Git Bash needs UCRT `bin` before Anaconda on `PATH`
-   - Native Windows `.exe` runs in UCRT64, Git Bash, CMD
+   - Native Windows `.exe` runs in UCRT64, Git Bash, cmd, PowerShell
 
 3. **Usage**
    - Default `y`, joined args, empty string → blank lines
    - `--help` / `--version` only (no `-h` / `-v`)
    - `--help` anywhere in argv wins over `--version`
+   - **Pipes and terminals** table: TTY vs pipe write pattern; Windows `EINVAL` → `EPIPE` note for pipes
 
 4. **Exit codes**
    - `0`: help, version, broken pipe (`EPIPE`; Linux also ignores `SIGPIPE` first)
    - `1`: write/setup errors; stderr format `yes-toto: <context>: <reason>`
+   - `130`: Ctrl+C / `SIGINT`
 
 5. **Layout** — brief tree matching actual repo (include `LICENSE.txt`, `c_version.txt`):
    - `include/yes_toto.h` + `yes_toto_*.h`

@@ -13,12 +13,12 @@ alwaysApply: false
 | `include/yes_toto.h` | `YES_TOTO_BUF_SIZE` (65536), `YES_TOTO_VERSION_STRING`, `YES_TOTO_EXIT_*` enum, `fill_buffer()` (`static inline`), `yes_toto_run()` declaration |
 | `include/yes_toto_emit.h` | `yes_toto_emit_error()` |
 | `include/yes_toto_line.h` | `build_output_line()` |
-| `include/yes_toto_cli.h` | `scan_meta_flags()`, `print_help()`, `print_version()`, `install_sigpipe_ignore()` |
+| `include/yes_toto_cli.h` | `scan_meta_flags()`, `print_help()`, `print_version()`, `install_sigpipe_ignore()`, `install_sigint_handler()`, `yes_toto_exit_if_stop_requested()` |
 | `src/main.c` | `main()` only — dispatch help/version, setup, build line, call `yes_toto_run()` |
 | `src/yes_toto_emit.c` | stderr diagnostics: `yes-toto: <context>: <strerror(errno)>` |
-| `src/yes_toto_write.c` | `yes_toto_run()`, static `try_write_all()`, hot `write()` loop |
+| `src/yes_toto_write.c` | `yes_toto_run()`, static `try_write_all()`, `maybe_normalize_broken_pipe_errno()`, hot `write()` loop |
 | `src/yes_toto_line.c` | Join `argv[1…]` with spaces + `\n`; stack buffer or one pre-loop `malloc` |
-| `src/yes_toto_cli.c` | Meta-flag scan, help/version text, platform-specific SIGPIPE setup |
+| `src/yes_toto_cli.c` | Meta-flag scan, help/version text, SIGPIPE/SIGINT setup |
 
 Each `.c` file opens with a **chain-of-thought comment block** (responsibility, syscalls, heap in hot loop, throughput, C standard). Preserve that pattern when adding files.
 
@@ -31,22 +31,33 @@ MinGW builds define `_WIN32`; signal setup is guarded there (see below).
 
 `YES_TOTO_BUF_SIZE` is **65536** bytes.
 
-Rationale: L2-friendly prefill slab; aligns with typical pipe buffer sizes on Linux; amortises `write()` syscalls versus per-line I/O.
+Rationale: L2-friendly prefill slab; aligns with typical pipe buffer sizes on Linux; amortises `write()` syscalls versus per-line I/O **when stdout is a pipe or file**.
 
-`fill_buffer()` copies only **complete** lines into the slab. If `line_len > YES_TOTO_BUF_SIZE`, `yes_toto_run()` skips `fill_buffer()` and writes one line per outer iteration (pathological fallback, not the common path).
+`fill_buffer()` copies only **complete** lines into the slab. Used only on the **non-TTY** path (see below). If `line_len > YES_TOTO_BUF_SIZE`, `yes_toto_run()` always writes one line per outer iteration (pathological fallback).
+
+## TTY vs pipe output (`yes_toto_run`)
+
+| `isatty(STDOUT_FILENO)` | Outer loop | Rationale |
+|-------------------------|------------|-----------|
+| **true** (terminal) | one line per `try_write_all(line, line_len)` | Matches GNU `yes`; avoids flooding terminal emulators; Ctrl+C between small writes |
+| **false** (pipe/file) | `fill_buffer()` + 64 KiB `try_write_all(buf, filled)` | Throughput for `yes-toto \| head` etc. |
+
+Also use the one-line path when `line_len > YES_TOTO_BUF_SIZE`.
 
 ## Hot loop (`src/yes_toto_write.c`)
 
 **Allowed:**
 
-- Stack `char buf[YES_TOTO_BUF_SIZE]` prefilled via `fill_buffer()`
-- `write(STDOUT_FILENO, …)` in a loop until the current chunk is fully sent (partial writes retried; `EINTR` retried)
+- Stack `char buf[YES_TOTO_BUF_SIZE]` prefilled via `fill_buffer()` (pipe path only)
+- `write(STDOUT_FILENO, …)` in a loop until the current chunk is fully sent (partial writes retried)
+- `yes_toto_exit_if_stop_requested()` between writes
 
 **Forbidden:**
 
 - `printf` / `fprintf` / `puts` / `fputs` / `fwrite`
 - `malloc` / `calloc` / `realloc`
 
+On `EINTR`: `_exit(YES_TOTO_EXIT_SIGINT)` (130).
 On `EPIPE`: `fflush(stdout)` (ignore return value), then `exit(YES_TOTO_EXIT_OK_PIPE)` (0).
 On other write errors: `yes_toto_emit_error("write")`, `exit(1)`.
 
@@ -55,16 +66,26 @@ On other write errors: `yes_toto_emit_error("write")`, `exit(1)`.
 | Platform | `install_sigpipe_ignore()` | Broken pipe |
 |----------|----------------------------|-------------|
 | **Linux / POSIX** | `sigaction(SIGPIPE, SIG_IGN, NULL)` | `write()` → `errno == EPIPE` |
-| **Windows / MinGW (`_WIN32`)** | **No-op** (returns 0) — no `SIGPIPE` | `write()` failure; CRT often sets `EPIPE` |
+| **Windows / MinGW (`_WIN32`)** | **No-op** (returns 0) — no `SIGPIPE` | `write()` failure; CRT may set `EPIPE` or `EINVAL`; `maybe_normalize_broken_pipe_errno()` remaps `EINVAL` on pipe fds to `EPIPE` |
 
 Default `SIGPIPE` termination is wrong for `yes` on Linux; ignoring it is the POSIX idiom so `write()` fails with `EPIPE` instead.
+
+## SIGINT / Ctrl+C
+
+| Platform | Setup | Exit |
+|----------|-------|------|
+| **Linux / POSIX** | `sigaction(SIGINT, …)` sets `yes_toto_stop_requested` | Main thread: `_exit(130)` via `yes_toto_exit_if_stop_requested()` or on `EINTR` |
+| **Windows / MinGW** | `signal(SIGINT, …)` only — **no** `SetConsoleCtrlHandler` | Same — `_exit(130)` from main thread |
+
+Handlers **must not** call `_exit` directly (async exit can freeze MSYS/Git Bash PTYs). Flag + main-thread exit only.
 
 ## Exit codes
 
 | Code | Constant | Meaning |
 |------|----------|---------|
 | `0` | `YES_TOTO_EXIT_OK_PIPE` | `--help`, `--version`, or broken pipe |
-| `1` | `YES_TOTO_EXIT_WRITE_ERR` | Write/setup failure, OOM in `build_output_line`, or `sigaction` failure (Linux) |
+| `1` | `YES_TOTO_EXIT_WRITE_ERR` | Write/setup failure, OOM in `build_output_line`, or signal setup failure |
+| `130` | `YES_TOTO_EXIT_SIGINT` | Ctrl+C / `SIGINT` (`128 + 2`) |
 
 ## Error messages
 
