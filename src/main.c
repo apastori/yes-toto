@@ -8,10 +8,9 @@
  *    with a fallback path for lines longer than YES_TOTO_BUF_SIZE.
  *
  * 2. Syscall failure modes:
- *    - write(STDOUT_FILENO, ...): returns -1 with errno EINTR → retry;
- *      EPIPE with SIGPIPE ignored → treat as normal consumer closure, exit 0;
- *      other errno → perror-style message, exit 1. Partial success (0<n<count)
- *      → advance pointer and continue (not an error).
+ *    - write(STDOUT_FILENO, ...): returns -1 with errno EINTR → exit 130
+ *      (SIGINT / Ctrl+C); EPIPE with SIGPIPE ignored → treat as normal
+ *      consumer closure, exit 0; other errno → perror-style message, exit 1.
  *    - sigaction(SIGPIPE, SIG_IGN): on failure sets errno; we check and abort
  *      with a clear error to stderr, exit 1 (pathological on POSIX).
  *    - fflush(stdout) before exit(0) on EPIPE: may fail with errno; we
@@ -66,6 +65,10 @@ int main(int argc, char **argv)
     }
 
     if (install_sigpipe_ignore() != 0) {
+        return YES_TOTO_EXIT_WRITE_ERR;
+    }
+
+    if (install_sigint_handler() != 0) {
         return YES_TOTO_EXIT_WRITE_ERR;
     }
 
