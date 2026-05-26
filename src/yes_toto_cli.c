@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #define YES_TOTO_ARG_HELP         "--help"
 #define YES_TOTO_ARG_HELP_SHORT   "--h"
