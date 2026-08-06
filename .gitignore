@@ -26,8 +26,12 @@
 *.idb
 *.pdb
 
-# Build directories
-/build/
+# Build artefacts under build/ (directories kept via .gitkeep)
+/build/*
+!/build/.gitkeep
+!/build/tests/
+/build/tests/*
+!/build/tests/.gitkeep
 /bin/
 /obj/
 /out/
