@@ -7,6 +7,8 @@
 #   -Wpedantic        Reject common extensions and dubious constructs.
 #   -Werror           Treat warnings as build-breaking (zero-warning policy).
 #   -D_POSIX_C_SOURCE=200809L  Expose POSIX.1-2008 (sigaction, write, etc.).
+#
+# Artefacts live under build/ (objects + binaries). Tests under build/tests/.
 
 CC := $(shell command -v gcc >/dev/null 2>&1 && echo gcc || echo clang)
 
@@ -18,6 +20,9 @@ CFLAGS := $(CFLAGS_COMMON) -O2
 # Sanitizers need matching compile+link flags.
 CFLAGS_DEBUG := $(CFLAGS_COMMON) -g -O1 -fsanitize=address,undefined \
 	-fno-omit-frame-pointer
+
+BUILD_DIR := build
+TEST_BUILD_DIR := $(BUILD_DIR)/tests
 
 MAIN_SRCS := src/main.c \
 	src/yes_toto_emit.c \
@@ -34,26 +39,47 @@ TEST_SRCS := tests/test_runner.c \
 	tests/test_fill_line_eq_buf.c \
 	tests/test_fill_ub_note.c
 
+TEST_HDRS := $(wildcard tests/*.h)
+
+MAIN_OBJS := $(patsubst src/%.c,$(BUILD_DIR)/%.o,$(MAIN_SRCS))
+TEST_OBJS := $(patsubst tests/%.c,$(TEST_BUILD_DIR)/%.o,$(TEST_SRCS))
+
+YES_TOTO := $(BUILD_DIR)/yes-toto
+YES_TOTO_DEBUG := $(BUILD_DIR)/yes-toto-debug
+TEST_CORE := $(TEST_BUILD_DIR)/test_core
+
 .PHONY: all debug test clean install
 
-all: yes-toto
+all: $(YES_TOTO)
 
-yes-toto: $(MAIN_SRCS) $(HDRS)
-	$(CC) $(CFLAGS) -o $@ $(MAIN_SRCS)
+$(YES_TOTO): $(MAIN_OBJS) $(HDRS) | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -o $@ $(MAIN_OBJS)
 
-debug: yes-toto-debug
+debug: $(YES_TOTO_DEBUG)
 
-yes-toto-debug: $(MAIN_SRCS) $(HDRS)
+# Debug/sanitizer binary: compile+link from sources with CFLAGS_DEBUG
+# (must not reuse release .o files built with -O2).
+$(YES_TOTO_DEBUG): $(MAIN_SRCS) $(HDRS) | $(BUILD_DIR)
 	$(CC) $(CFLAGS_DEBUG) -o $@ $(MAIN_SRCS)
 
-tests/test_core: $(TEST_SRCS) $(HDRS) $(wildcard tests/*.h)
-	$(CC) $(CFLAGS) -o $@ $(TEST_SRCS)
+$(TEST_CORE): $(TEST_OBJS) $(HDRS) $(TEST_HDRS) | $(TEST_BUILD_DIR)
+	$(CC) $(CFLAGS) -o $@ $(TEST_OBJS)
 
-test: tests/test_core
-	./tests/test_core
+test: $(TEST_CORE)
+	./$(TEST_CORE)
+
+$(BUILD_DIR)/%.o: src/%.c $(HDRS) | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(TEST_BUILD_DIR)/%.o: tests/%.c $(HDRS) $(TEST_HDRS) | $(TEST_BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(BUILD_DIR) $(TEST_BUILD_DIR):
+	mkdir -p $@
 
 clean:
-	rm -f yes-toto yes-toto-debug tests/test_core
+	rm -f $(MAIN_OBJS) $(TEST_OBJS) $(YES_TOTO) $(YES_TOTO_DEBUG) $(TEST_CORE)
+	rm -f $(YES_TOTO).exe $(YES_TOTO_DEBUG).exe $(TEST_CORE).exe
 
-install: yes-toto
-	install -m 755 yes-toto /usr/local/bin
+install: $(YES_TOTO)
+	install -m 755 $(YES_TOTO) /usr/local/bin
