@@ -68,7 +68,8 @@ Supporting behaviour:
 ```
 include/   — yes_toto.h + yes_toto_{emit,line,cli}.h
 src/       — main.c + yes_toto_{emit,write,line,cli}.c
-tests/     — test_runner.c + test_fill_*.c / .h → binary tests/test_core
+tests/     — test_runner.c + test_fill_*.c / .h
+build/     — objects + binaries; dirs via .gitkeep, artefacts gitignored
 ```
 
 See `implementation.mdc`, `toolchain-structure.mdc`, and `testing.mdc` for detail.

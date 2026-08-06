@@ -31,19 +31,19 @@ CC := $(shell command -v gcc >/dev/null 2>&1 && echo gcc || echo clang)
 
 ## Build system
 
-**GNU Make** at repo root. Single link step for the main binary (no separate `.o` rules).
+**GNU Make** at repo root. Separate compile (`.o`) and link steps. All artefacts under **`build/`**.
 
 | Target | Output |
 |--------|--------|
-| `make` / `all` | `yes-toto` |
-| `make debug` | `yes-toto-debug` |
-| `make test` | builds + runs `tests/test_core` |
-| `make clean` | removes `yes-toto`, `yes-toto-debug`, `tests/test_core` |
-| `make install` | `install -m 755 yes-toto /usr/local/bin` (Linux/macOS; needs sudo) |
+| `make` / `all` | `build/yes-toto` |
+| `make debug` | `build/yes-toto-debug` |
+| `make test` | builds + runs `build/tests/test_core` |
+| `make clean` | removes objects/binaries under `build/`; keeps `.gitkeep` |
+| `make install` | `install -m 755 build/yes-toto /usr/local/bin` (Linux/macOS; needs sudo) |
 
-**Main sources:** `src/main.c`, `src/yes_toto_emit.c`, `src/yes_toto_write.c`, `src/yes_toto_line.c`, `src/yes_toto_cli.c`
+**Main sources:** `src/main.c`, `src/yes_toto_emit.c`, `src/yes_toto_write.c`, `src/yes_toto_line.c`, `src/yes_toto_cli.c` → objects `build/*.o`
 
-**Test sources:** `tests/test_runner.c`, `tests/test_fill_one_byte.c`, `tests/test_fill_divides_exact.c`, `tests/test_fill_indivisible.c`, `tests/test_fill_line_eq_buf.c`, `tests/test_fill_ub_note.c`
+**Test sources:** `tests/test_runner.c`, `tests/test_fill_one_byte.c`, `tests/test_fill_divides_exact.c`, `tests/test_fill_indivisible.c`, `tests/test_fill_line_eq_buf.c`, `tests/test_fill_ub_note.c` → objects `build/tests/*.o`
 
 ## Dependencies
 
@@ -69,21 +69,31 @@ yes-toto/
 │   ├── yes_toto_write.c
 │   ├── yes_toto_line.c
 │   └── yes_toto_cli.c
-└── tests/
-    ├── test_runner.c
-    ├── test_fill_one_byte.c / .h
-    ├── test_fill_divides_exact.c / .h
-    ├── test_fill_indivisible.c / .h
-    ├── test_fill_line_eq_buf.c / .h
-    └── test_fill_ub_note.c / .h
+├── tests/
+│   ├── test_runner.c
+│   ├── test_fill_one_byte.c / .h
+│   ├── test_fill_divides_exact.c / .h
+│   ├── test_fill_indivisible.c / .h
+│   ├── test_fill_line_eq_buf.c / .h
+│   └── test_fill_ub_note.c / .h
+└── build/               — scaffolding tracked; artefacts gitignored
+    ├── .gitkeep
+    ├── *.o              — generated
+    ├── yes-toto         — generated
+    ├── yes-toto-debug   — generated
+    └── tests/
+        ├── .gitkeep
+        ├── *.o          — generated
+        └── test_core    — generated
 ```
 
-Build artefacts (`yes-toto`, `yes-toto.exe`, `tests/test_core`, `tests/test_core.exe`) are gitignored.
+Build artefacts under `build/` (including `yes-toto.exe` / `test_core.exe` on Windows) are gitignored. Directories stay in the repo via `build/.gitkeep` and `build/tests/.gitkeep`.
 
 ## Building on Linux
 
 ```sh
 make clean && make && make test
+./build/yes-toto --version
 ```
 
 ## Building on Windows (MSYS2 UCRT64)
@@ -94,9 +104,10 @@ make clean && make && make test
 pacman -S make mingw-w64-ucrt-x86_64-gcc   # once
 cd /path/to/yes-toto
 make clean && make && make test
+./build/yes-toto --version
 ```
 
-Produces a **native Windows executable** (`yes-toto` or `yes-toto.exe`). Runs in UCRT64, Git Bash, and CMD.
+Produces a **native Windows executable** (`build/yes-toto` or `build/yes-toto.exe`). Runs in UCRT64, Git Bash, and CMD.
 
 ### Git Bash caveat
 
@@ -111,3 +122,4 @@ PATH="/c/msys64/ucrt64/bin:$PATH" make
 - `fill_buffer()` is `static inline` in `yes_toto.h` — compiled into `yes_toto_write.c` and each test TU.
 - Tests **do not** link `src/*.c`; they only exercise `fill_buffer()` via the header.
 - `main()` lives only in `src/main.c`.
+- Debug binary is linked in one step from sources with `CFLAGS_DEBUG` (does not reuse release `.o` files).

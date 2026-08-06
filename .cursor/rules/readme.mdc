@@ -15,6 +15,7 @@ Keep `README.md` user-focused. Align with `project-overview.mdc` and `implementa
 
 2. **Build**
    - `make`, `make debug`, `make test`, `make clean`, optional `make install`
+   - Artefacts under `build/` (`build/yes-toto`, `build/yes-toto-debug`, `build/tests/test_core`)
    - **Linux:** `make clean && make`
    - **Windows:** MSYS2 **UCRT64** terminal; `pacman -S make mingw-w64-ucrt-x86_64-gcc`; note Git Bash needs UCRT `bin` before Anaconda on `PATH`
    - Native Windows `.exe` runs in UCRT64, Git Bash, cmd, PowerShell
@@ -23,6 +24,7 @@ Keep `README.md` user-focused. Align with `project-overview.mdc` and `implementa
    - Default `y`, joined args, empty string → blank lines
    - `--help` / `--h` and `--version` / `--v` (no single-dash `-h` / `-v`)
    - help anywhere in argv wins over version
+   - Examples use `./build/yes-toto`
    - **Pipes and terminals** table: TTY vs pipe write pattern; Windows `EINVAL` → `EPIPE` note for pipes
 
 4. **Exit codes**
@@ -33,7 +35,8 @@ Keep `README.md` user-focused. Align with `project-overview.mdc` and `implementa
 5. **Layout** — brief tree matching actual repo (include `LICENSE.txt`, `c_version.txt`):
    - `include/yes_toto.h` + `yes_toto_*.h`
    - `src/main.c` + `yes_toto_{emit,write,line,cli}.c`
-   - `tests/test_runner.c` + `test_fill_*.c` → `tests/test_core`
+   - `tests/test_runner.c` + `test_fill_*.c` → binary `build/tests/test_core`
+   - `build/` — object/binary output; dirs kept via `.gitkeep`, artefacts gitignored
 
 ## Do not document in README
 

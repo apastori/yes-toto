@@ -8,7 +8,7 @@ alwaysApply: false
 
 ## Scope
 
-The Makefile `test` target builds and runs **`tests/test_core`** (or `tests/test_core.exe` on Windows).
+The Makefile `test` target builds and runs **`build/tests/test_core`** (or `build/tests/test_core.exe` on Windows).
 
 Tests cover **`fill_buffer()`** only. There are **no** subprocess/integration tests in-tree; the infinite output loop is not unit-tested.
 
@@ -33,9 +33,14 @@ One scenario per `.c` / `.h` pair; headers declare the test function for `test_r
 
 ## Build (from `Makefile`)
 
+Objects and the test binary live under `build/tests/`:
+
 ```makefile
-tests/test_core: $(TEST_SRCS) $(HDRS) $(wildcard tests/*.h)
-	$(CC) $(CFLAGS) -o $@ $(TEST_SRCS)
+TEST_CORE := build/tests/test_core
+# $(TEST_BUILD_DIR)/%.o ← tests/%.c
+# link $(TEST_CORE) from $(TEST_OBJS)
+test: $(TEST_CORE)
+	./$(TEST_CORE)
 ```
 
 `fill_buffer()` comes from `#include "yes_toto.h"` in each test file — **no link with `src/*.c`**.
@@ -58,9 +63,9 @@ tests/test_core: $(TEST_SRCS) $(HDRS) $(wildcard tests/*.h)
 After `make`:
 
 ```sh
-./yes-toto --version
-./yes-toto --help
-./yes-toto | head -n 3    # expect exit 0, no stderr (pipe / 64 KiB path)
-./yes-toto hello | head -n 1
-# Interactive: ./yes-toto then Ctrl+C — expect exit 130; terminal stays responsive
+./build/yes-toto --version
+./build/yes-toto --help
+./build/yes-toto | head -n 3    # expect exit 0, no stderr (pipe / 64 KiB path)
+./build/yes-toto hello | head -n 1
+# Interactive: ./build/yes-toto then Ctrl+C — expect exit 130; terminal stays responsive
 ```
