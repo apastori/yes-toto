@@ -13,12 +13,14 @@ slab via `fill_buffer()` to amortise syscalls (`yes-toto | head`, etc.).
 ## Build
 
 ```sh
-make            # release binary: ./yes-toto
-make debug      # sanitizers + debug symbols
-make test       # unit tests for fill_buffer
-make clean
+make            # release binary: ./build/yes-toto
+make debug      # sanitizers + debug symbols → ./build/yes-toto-debug
+make test       # unit tests for fill_buffer → ./build/tests/test_core
+make clean      # removes objects/binaries; keeps build/.gitkeep scaffolding
 sudo make install   # installs to /usr/local/bin (optional)
 ```
+
+Object files and binaries are written under `build/` (tests under `build/tests/`). The directories are tracked via `.gitkeep`; artefacts are gitignored. Source under `src/` and `tests/` is unchanged.
 
 Requires `gcc` or `clang` and `write(2)` (POSIX-like systems). On Linux, `sigaction` is used for `SIGPIPE`; on Windows (MSYS2 UCRT64 MinGW) build natively — see below.
 
@@ -32,7 +34,7 @@ cd /c/Users/alfon/Desktop/code/yes-toto
 make clean && make
 ```
 
-The resulting `yes-toto` is a native Windows executable and runs in UCRT64, Git Bash, cmd, and PowerShell.
+The resulting `build/yes-toto` is a native Windows executable and runs in UCRT64, Git Bash, cmd, and PowerShell.
 
 ### Linux
 
@@ -42,10 +44,10 @@ make clean && make
 
 ## Usage
 
-- `yes-toto` — prints `y` plus newline forever.
-- `yes-toto STRING ...` — prints the arguments joined by single spaces, plus newline, forever.
-- `yes-toto --help` / `yes-toto --h` — print help and exit.
-- `yes-toto --version` / `yes-toto --v` — print version and exit.
+- `./build/yes-toto` — prints `y` plus newline forever.
+- `./build/yes-toto STRING ...` — prints the arguments joined by single spaces, plus newline, forever.
+- `./build/yes-toto --help` / `./build/yes-toto --h` — print help and exit.
+- `./build/yes-toto --version` / `./build/yes-toto --v` — print version and exit.
 
 Help is detected anywhere in the argument list and takes precedence over version (`--help` or `--h` over `--version` or `--v`).
 
@@ -53,8 +55,8 @@ Help is detected anywhere in the argument list and takes precedence over version
 
 | stdout destination | Write pattern | Example |
 |--------------------|---------------|---------|
-| Terminal (`isatty`) | one line per loop | `./yes-toto` — Ctrl+C exits **130** |
-| Pipe or redirect | 64 KiB prefill slab | `./yes-toto \| head -n 5` — exits **0** when `head` closes the pipe |
+| Terminal (`isatty`) | one line per loop | `./build/yes-toto` — Ctrl+C exits **130** |
+| Pipe or redirect | 64 KiB prefill slab | `./build/yes-toto \| head -n 5` — exits **0** when `head` closes the pipe |
 
 On Windows (MinGW), a broken pipe may surface as `EINVAL` instead of `EPIPE`; the write path normalises that to `EPIPE` so piped use stays quiet (no stderr error).
 
@@ -72,4 +74,5 @@ On Windows (MinGW), a broken pipe may surface as `EINVAL` instead of `EPIPE`; th
 - `include/yes_toto_*.h` — declarations for emit, line build, CLI helpers.
 - `src/main.c` — entry point only.
 - `src/yes_toto_emit.c`, `yes_toto_write.c`, `yes_toto_line.c`, `yes_toto_cli.c` — implementation units.
-- `tests/test_runner.c` plus `tests/test_fill_*.c` / `.h` — `assert()`-based `fill_buffer` tests; built binary `tests/test_core`.
+- `tests/test_runner.c` plus `tests/test_fill_*.c` / `.h` — `assert()`-based `fill_buffer` tests.
+- `build/` — object/binary output (`build/yes-toto`, `build/tests/test_core`); dirs kept via `.gitkeep`, artefacts gitignored.
